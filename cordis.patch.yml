@@ -1,0 +1,18 @@
+# dsh-mainline — bundle patch
+#
+# One Loader row (`mainline`). A profile's own cordis.patch.yml can target that id to override
+# `config` (replaced wholesale, not merged — restate every key you keep) or set `disabled: true`.
+- insert:
+    - id: mainline
+      name: 'dsh-mainline'
+      config:
+        # Where the project files live. Empty = $DSH_HOME/mainline. The directory is a git
+        # repository the plugin commits to; point it at an existing notes repo if you like.
+        root: ''
+        # Working directory of the DSH conversation, and of commands run from a card that has no
+        # `cwd` of its own. Empty = your home directory. Never the tree root itself.
+        sessionCwd: ''
+        # Changes within this window are committed together.
+        commitDelayMs: 4000
+        # Explain the tree to the model (a short note in other sessions, the full guide in its own).
+        guidance: true

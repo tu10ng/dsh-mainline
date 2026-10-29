@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>工作树 · 主线原型</title>
+<style>
+:root {
+  --bg: #f7f8fa; --card: #ffffff; --fg: #1f2328; --fg2: #424a53; --muted: #8c959f; --line: #e3e6ea;
+  --soft: #f3f4f6; --frame: rgba(120, 130, 145, .05); --ink: #1f2328; --dead: #cfd4da; --dot: #e1e4e8;
+  --pending: #9a6700; --ok: #1a7f37; --q: #bf8700;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
+  --lift: 0 10px 30px rgba(15, 23, 42, .14), 0 2px 6px rgba(15, 23, 42, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111316; --card: #1a1d21; --fg: #e6e8eb; --fg2: #b9c0c8; --muted: #7d8590; --line: #2c3036;
+    --soft: #22262b; --frame: rgba(255, 255, 255, .025); --ink: #e6e8eb; --dead: #3b4048; --dot: #1f2226;
+    --pending: #d29922; --ok: #3fb950; --q: #d29922;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4); --lift: 0 10px 30px rgba(0, 0, 0, .55);
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; background: var(--bg); color: var(--fg); font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+button { font: inherit; color: inherit; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+
+/* ── canvas ── */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bar { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--card); }
+.tabs { flex: 1; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tab { border: 0; background: none; padding: 4px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.tab:hover { background: var(--soft); }
+.tab[aria-selected="true"] { background: var(--soft); color: var(--fg); font-weight: 600; }
+.tab .n { font-size: 11px; font-weight: 500; color: var(--hue); }
+.tab.dead { opacity: .75; }
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 3px 10px; cursor: pointer; flex: none; }
+.btn:hover { background: var(--soft); }
+.zoom { color: var(--muted); font-size: 12px; width: 42px; text-align: right; flex: none; }
+
+.view { flex: 1; position: relative; overflow: hidden; outline: none; cursor: grab; background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size: 22px 22px; }
+.view.panning { cursor: grabbing; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.world.glide { transition: transform .35s cubic-bezier(.2, .7, .2, 1); }
+.world > svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+
+.card { position: absolute; left: 0; top: 0; width: 224px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px 8px 14px; box-shadow: var(--shadow); cursor: pointer; user-select: none; }
+.card:hover { border-color: color-mix(in srgb, var(--muted) 55%, var(--line)); }
+.card.todo::before { content: ""; position: absolute; left: 5px; top: 9px; bottom: 9px; width: 3px; border-radius: 2px; background: var(--hue); }
+.card.halt { background: var(--soft); border-style: dashed; box-shadow: none; }
+.card.halt .t { color: var(--muted); }
+.card.sel { box-shadow: var(--lift); border-color: var(--ink); border-style: solid; z-index: 2; }
+.card.fresh { animation: fresh 1.8s ease-out; }
+@keyframes fresh { from { box-shadow: 0 0 0 4px color-mix(in srgb, #2da44e 45%, transparent); } }
+.card .t { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.card.sel .t { -webkit-line-clamp: unset; font-weight: 600; }
+.card .q { display: inline-block; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; background: color-mix(in srgb, var(--q) 18%, transparent); color: var(--q); font-weight: 700; font-size: 11px; margin-right: 5px; vertical-align: 1px; }
+.card .peek { color: var(--muted); font-size: 11.5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .foot { display: flex; gap: 6px; align-items: center; margin-top: 6px; font-size: 11px; color: var(--muted); min-width: 0; }
+.card .foot:empty { display: none; }
+.card .refs { display: inline-flex; gap: 4px; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-radius: 9px; padding: 0 7px 0 5px; background: var(--soft); cursor: pointer; }
+.card .refs:hover { color: var(--fg); }
+.card .refs svg { flex: none; }
+.card .fold { border: 1px solid var(--line); border-radius: 9px; padding: 0 7px; cursor: pointer; flex: none; background: var(--card); }
+.card .fold:hover { color: var(--fg); border-color: var(--muted); }
+.card input.edit { width: 100%; font: inherit; font-weight: 600; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; outline: none; }
+.card.proj { width: 400px; padding: 12px 16px 12px 18px; border-radius: 12px; }
+.card.proj .t { font-size: 14.5px; font-weight: 650; -webkit-line-clamp: 2; }
+.card.proj .peek { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 4px; }
+.lane { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 11.5px; font-weight: 600; color: var(--hue); background: var(--card); border: 1px solid color-mix(in srgb, var(--hue) 45%, var(--line)); border-radius: 999px; padding: 1px 10px; cursor: pointer; user-select: none; }
+.lane.dead { color: var(--muted); border-color: var(--line); }
+.forkt { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 11.5px; color: var(--muted); user-select: none; }
+.keys { color: var(--muted); font-size: 11.5px; padding: 7px 16px; border-top: 1px solid var(--line); background: var(--card); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.keys b { font-weight: 500; color: var(--fg2); }
+
+/* ── side: references + conversation ── */
+.side { flex: 0 0 400px; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--card); min-width: 0; }
+.detail { flex: 0 1 auto; max-height: 58%; overflow: auto; padding: 14px 18px 12px; border-bottom: 1px solid var(--line); }
+.where { color: var(--muted); font-size: 12px; }
+.detail h2 { font-size: 15px; margin: 4px 0 8px; font-weight: 600; cursor: text; }
+.detail h2 .q { color: var(--q); margin-right: 4px; }
+.ctl { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: none; padding: 1px 9px; cursor: pointer; color: var(--muted); font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--soft); color: var(--fg); font-weight: 500; }
+.mini { border: 1px solid var(--line); background: none; border-radius: 7px; padding: 1px 8px; font-size: 12px; cursor: pointer; color: var(--fg2); }
+.mini:hover { background: var(--soft); }
+.mini[aria-pressed="true"] { color: var(--q); border-color: color-mix(in srgb, var(--q) 50%, var(--line)); }
+.body { padding: 6px 8px; margin: 0 -8px; border-radius: 7px; color: var(--fg2); white-space: pre-wrap; outline: none; min-height: 24px; }
+.body:hover { background: var(--soft); }
+.body:focus { background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); }
+.body:empty::before { content: "这一步的结论、现象……"; color: var(--muted); }
+.refh { margin: 12px 0 4px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.refh b { color: var(--fg); font-weight: 600; }
+.ref { border-left: 2px solid var(--line); padding: 2px 0 2px 10px; margin: 4px 0; }
+.ref summary { cursor: pointer; font-weight: 500; list-style: none; }
+.ref summary::before { content: "▸ "; color: var(--muted); }
+.ref[open] > summary::before { content: "▾ "; }
+.ref .rbody { color: var(--fg2); white-space: pre-wrap; font-size: 12.5px; padding: 2px 0; outline: none; }
+.ref .rbody:focus { background: var(--soft); }
+.ref.hit { border-left-color: var(--hue); }
+.chat { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chat-head { padding: 8px 18px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.chat-head b { color: var(--fg); font-size: 13px; margin-right: 6px; }
+.log { flex: 1; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.inj { border: 1px solid var(--line); border-radius: 8px; font-size: 12px; color: var(--muted); }
+.inj summary { padding: 5px 10px; cursor: pointer; list-style: none; }
+.inj summary::before { content: "▸ "; } .inj[open] summary::before { content: "▾ "; }
+.inj ul, .queue ul { margin: 0; padding: 0 10px 8px 26px; }
+.inj li, .queue li { margin: 2px 0; }
+.msg { padding: 7px 11px; border-radius: 10px; max-width: 92%; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: var(--soft); }
+.msg.ai { align-self: flex-start; padding-left: 0; }
+.tool { font-size: 12px; color: var(--ok); }
+.queue { border: 1px dashed color-mix(in srgb, var(--pending) 60%, transparent); color: var(--pending); border-radius: 8px; padding: 6px 10px 0; font-size: 12px; }
+.queue ul { padding-left: 16px; }
+.composer { border-top: 1px solid var(--line); padding: 10px 14px 12px; }
+.composer input { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; background: var(--card); color: var(--fg); font: inherit; outline: none; }
+.composer input:focus { border-color: var(--muted); }
+</style>
+</head>
+<body>
+
+<section class="main">
+  <div class="bar">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <button class="btn" id="home">回到焦点</button>
+    <button class="btn" id="fit">适应窗口</button>
+    <span class="zoom" id="zoom"></span>
+  </div>
+  <div class="view" id="view" tabindex="0"><div class="world" id="world"><svg id="edges"></svg></div></div>
+  <div class="keys">
+    <b>点卡片</b> 聚焦（AI 会知道） · <b>点 📎</b> 看参考 · <b>拖空白</b> 平移 · <b>Ctrl+滚轮</b> 缩放 ·
+    <b>↑↓</b> 上一步 / 下一步 · <b>←→</b> 换支线 · <b>Enter</b> 改名 · <b>Ctrl+Enter</b> 加下一步 · <b>Tab</b> 拆成子步骤 ·
+    <b>Y</b> 从这里分叉 · <b>Q</b> 疑问 · <b>T</b> 要做↔不用做 · <b>N</b> 记录 · <b>Alt+↑↓</b> 调序 · <b>Space</b> 折叠
+  </div>
+</section>
+
+<aside class="side">
+  <div class="detail" id="detail"></div>
+  <div class="chat">
+    <div class="chat-head"><b>DSH 会话</b>普通会话，侧边栏里也在 · 一个会话管所有项目</div>
+    <div class="log" id="log"></div>
+    <div class="composer"><form id="form"><input id="input" autocomplete="off" placeholder="说点什么，比如：nas-b 的 scrub 报了校验错误"></form></div>
+  </div>
+</aside>
+
+<script>
+// ═══════════════════════════ model: main line, forks, references ═══════════════════════════
+// A project is a walkthrough. Its main line is a list of steps; a fork splits the line
+// into lanes that run side by side and merge back; references hang on a step and are
+// never drawn as part of the line — they are what you look up, not what you follow.
+let seq = 0
+const S = (title, o = {}) => ({ id: 's' + ++seq, kind: 'step', title, body: o.body || '', state: o.state || '', q: !!o.q, refs: o.refs || [], sub: o.sub || null, fold: !!o.fold })
+const F = (lanes, title = '') => ({ id: 'f' + ++seq, kind: 'fork', title, lanes: lanes.map(([label, line]) => ({ id: 'l' + ++seq, label, line })) })
+const R = (title, body = '', refs = []) => ({ id: 'r' + ++seq, title, body, refs })
+const P = (title, short, o = {}) => ({ ...S(title, o), proj: true, short, line: o.line || [] })
+const todo = { state: 'todo' }
+
+const projects = [
+  P("NAS 迁移到 ZFS", "NAS→ZFS", { state: "halt", body: "把家里的 NAS 从旧的 ext4 + mdadm 阵列迁到 ZFS：两台机器（nas-a 做主、nas-b 做备份），数据先备份、再建池、再导回，最后验证重启后自动挂载。", refs: [R("设计笔记", "存放选型笔记：为什么选 raidz1 而不是镜像，快照策略与保留周期，以及回滚预案的链接。", []), R("磁盘清单", "三块旧盘（2×4T + 1×2T）和两块新盘（各 8T），分别标注型号、通电时长与 SMART 状态。", [R("旧阵列", "mdadm 的 RAID1，挂载在 /mnt/old，容量 3.6T，已用 2.1T。", []), R("新盘", "两块 8T 的 CMR 盘，装在 nas-a；购买记录见设计笔记。", []), R("zpool 布局", "nas-a 用 raidz1，nas-b 用单盘 + 定期 send/recv。", [])]), R("(cmd) 状态", "查看池、数据集与磁盘健康的常用命令：\n\n```bash\nzpool status\nzfs list -o name,used,avail\nsmartctl -a /dev/sda\n```", []), R("回滚预案", "旧阵列在迁移完成两周内不拆，必要时把 /mnt/old 重新挂回即可。", []), R("参考", "OpenZFS 文档与社区里关于 ashift、recordsize 的讨论链接。", [])], line: [S("备份旧数据", { state: "", q: false, body: "先把 /mnt/old 整体备份到外接硬盘，核对文件数量，再动任何一块盘。", refs: [R("备份位置", "外接硬盘挂载在 /mnt/usb，目录按日期命名。", []), R("rsync 参数", "先用 --dry-run 看一遍会拷什么：\n\n```bash\nrsync -aHv --dry-run /mnt/old/ /tank/data/\n```", [])] }), S("盘位与接线", { state: "", q: false, body: "确认每块盘对应的接口和线序，避免装反。", refs: [R("盘位图", "机箱前面板从左到右依次是 sda、sdb、sdc。", [])] }), F([["nas-a", [S("装盘", { state: "", q: false, body: "关机、装盘、开机，确认系统识别到新盘。", refs: [R("盘位", "新盘插在第 4、5 个盘位。\n\n```bash\nlsblk -f\n```", [])] }), S("建池", { state: "", q: false, body: "用 by-id 路径建池，ashift 设为 12。", refs: [R("建池命令", "建好以后立刻看状态：\n\n```bash\nzpool status\n```", [])] }), S("导入数据", { state: "", q: false, body: "把备份导回 tank/data，先 dry-run 再正式拷。", refs: [R("rsync", "```bash\nrsync -aHv --dry-run /mnt/old/ /tank/data/\n```", [])] }), S("验证", { state: "", q: false, body: "看池状态、容量，再抽查几个大文件的校验和。", refs: [R("test", "```bash\nzfs list -o name,used,avail\ndf -h\n```", [])] })]], ["nas-b", [S("清点旧盘", { state: "", q: false, body: "把旧盘逐块接上，记录型号与序列号。", refs: [] }), S("换盘", { state: "", q: false, body: "2T 的那块 SMART 有重分配扇区，换成新盘。", refs: [R("smart 报告", "换盘前后的报告都存档：\n\n```bash\nsmartctl -a /dev/sda\n```", []), R("校验", "换盘后跑一次 scrub，确认没有校验错误。", [R("校验清单", "scrub 结束后记录错误数与耗时。", [])])] }), S("内核日志", { state: "", q: false, body: "看换盘时内核有没有报链路错误。\n\n```bash\ndmesg | grep -i ata\n```", refs: [] }), S("验证", { state: "", q: false, body: "```bash\nlsblk -f\nzpool status\n```", refs: [] })]]], "两台机器"), S("调整挂载点", { state: "", q: false, body: "把 /tank/data 挂回原来的路径，更新 fstab 和共享配置。", refs: [] }), S("增加迁移日志", { state: "", q: false, body: "每一步的命令和输出都记到迁移日志里，方便事后复盘。", refs: [] }), S("确认 ashift 是否设为 12", { state: "halt", q: true, body: "确认过：两块新盘都是 4K 扇区，建池时显式指定 ashift=12，zpool get ashift tank 返回 12。", refs: [] }), S("评审快照策略，复核容量", { state: "halt", q: false, body: "", refs: [R("遗留问题", "快照保留周期还没定，先按每天一份保留七天。", [])] }), S("验证重启后自动挂载", { state: "halt", q: false, body: "", refs: [] }), S("收尾", { state: "halt", q: false, body: "", refs: [] })] }),
+  P("博客换静态站点生成器", "博客", { state: "", body: "把个人博客从旧的动态博客程序迁到静态站点生成器：文章转换、图片与代码高亮、部署，以及迁移过程里暴露的问题。", refs: [R("迁移清单", "文章数量、分类、固定链接格式，以及需要保留的旧地址。", []), R("issue #12", "正文仍是空模板，只有一个标题。", [])], line: [S("文章迁移与验收", { state: "", q: false, body: "转换 → 构建基线 → 对齐页面 → 图片 / 文本 / 代码高亮。", refs: [], sub: [S("转换文章", { state: "halt", q: false, body: "已转换。", refs: [] }), S("构建时间测试", { state: "todo", q: false, body: "", refs: [] }), S("同一批文章换主题，对比之前的构建时间", { state: "todo", q: false, body: "", refs: [] }), S("按迁移清单逐项对齐页面", { state: "todo", q: false, body: "", refs: [] }), F([["图片", [S("压缩 + 尺寸", { state: "todo", q: false, body: "", refs: [] })]], ["文本", [S("排版 + 目录", { state: "todo", q: false, body: "", refs: [] })]], ["代码高亮", [S("样式 + 行号", { state: "todo", q: false, body: "", refs: [] })]]], "三种内容")] }), F([["构建", [S("单篇文章实际渲染一遍，看生成的 HTML", { state: "todo", q: false, body: "", refs: [] }), S("增量构建对模板改动的正确性", { state: "todo", q: false, body: "", refs: [] }), S("逐字比对", { state: "todo", q: false, body: "", refs: [] })]], ["性能", [S("首页加载慢只是因为图片没压缩？", { state: "todo", q: true, body: "假设，未证实。", refs: [] }), S("列表页一次渲染所有文章", { state: "todo", q: false, body: "", refs: [] }), S("缩略图没有按需生成", { state: "todo", q: false, body: "", refs: [R("PR #5", "", []), R("PR #8", "", [])] }), S("首次访问慢是 CDN 冷启动？", { state: "todo", q: true, body: "假设，未证实。", refs: [] })]], ["链接", [S("旧文章的固定链接", { state: "todo", q: false, body: "", refs: [] }), S("RSS 地址", { state: "todo", q: false, body: "", refs: [] }), S("站内引用", { state: "todo", q: false, body: "", refs: [] }), S("外链检查", { state: "todo", q: false, body: "", refs: [] }), S("404 页面", { state: "todo", q: false, body: "", refs: [] }), S("评论系统迁移", { state: "halt", q: false, body: "挂起。", refs: [] }), S("站内搜索", { state: "halt", q: false, body: "挂起。", refs: [] })]], ["样式", [S("深色模式", { state: "todo", q: false, body: "", refs: [] }), S("移动端排版", { state: "todo", q: false, body: "", refs: [] }), S("打印样式", { state: "todo", q: false, body: "", refs: [] })]], ["流程债", [S("部署脚本里写死了路径", { state: "todo", q: false, body: "", refs: [] }), S("构建缓存没有清理，旧文件残留", { state: "todo", q: false, body: "", refs: [] }), S("草稿分支没有合并到主分支", { state: "todo", q: false, body: "", refs: [] }), S("改了配置没有更新文档", { state: "todo", q: false, body: "", refs: [] })]]], "迁移里暴露的问题"), S("验证本批改动不影响旧站点", { state: "todo", q: false, body: "", refs: [] }), S("正式切换域名", { state: "todo", q: false, body: "", refs: [] })] }),
+  P("备份脚本加固", "备份脚本", { state: "halt", body: "夜间备份脚本偶尔没有产出，且没有任何告警；先查原因，再让脚本在失败时明确报错。", refs: [R("设计", "指向备份方案的笔记，遗留疑问：脚本是否在磁盘满时静默退出。", []), R("日志", "脚本的日志在 /var/log/backup.log，logrotate 每周轮转。", []), R("code", "梳理调用链：backup.sh → run_rsync → verify_snapshot，以及退出码与锁文件的约定。", [])], line: [S("磁盘满时脚本是否静默退出", { state: "todo", q: true, body: "遗留疑问。", refs: [] }), F([["cron 没跑", [S("待验证", { state: "todo", q: false, body: "", refs: [] })]], ["脚本提前退出", [S("待验证", { state: "todo", q: false, body: "", refs: [] })]]], "两个猜想"), S("把读取配置的函数提出来", { state: "halt", q: false, body: "重构点：读取配置的函数应提取为公共脚本。", refs: [] }), S("测试", { state: "", q: false, body: "", refs: [R("test", "通过下面的命令验证备份是否产出：\n\n```bash\ndf -h\nls -l /mnt/usb\n```", [])] })] }),
+  P("打印机驱动重复注册", "打印机", { state: "halt", body: "系统里同一台打印机出现了两份，原因是驱动被两个服务重复注册。", refs: [], line: [S("分析", { state: "", q: false, body: "定位为两个服务各自注册了一次。", refs: [R("日志摘录", "", []), R("cups.log", "", [])] }), S("改法", { state: "", q: false, body: "讨论结论：只保留一个服务负责注册，另一个改成只读取队列，无需额外依赖。", refs: [R("补丁说明", "", []), R("code", "给出注册函数、队列名与去重判断的位置。", [])] }), F([["注册", [S("打印机不再重复出现", { state: "", q: false, body: "验证重启服务后队列里只有一份。", refs: [] })]], ["打印", [S("打印测试页", { state: "", q: false, body: "通过测试页验证打印正常。", refs: [] })]]], "分两部分验证")] }),
+  P("清理旧配置", "清理配置", { state: "halt", body: "清理旧配置文件，无具体内容记录。", refs: [], line: [] }),
+  P("路由器固件升级后菜单残留", "路由器", { state: "halt", body: "固件升级后管理页面里还留着旧菜单，需要清理，无具体内容记录。", refs: [], line: [] }),
+]
+
+// ═══════════════════════════ index ═══════════════════════════
+let loc = new Map()
+function index() {
+  loc = new Map()
+  const walk = (line, owner) => line.forEach((it, idx) => {
+    loc.set(it.id, { it, line, idx, owner })
+    if (it.kind === 'fork') it.lanes.forEach((ln) => { loc.set(ln.id, { lane: ln, fork: it }); walk(ln.line, { kind: 'lane', lane: ln, fork: it }) })
+    else if (it.sub) walk(it.sub, { kind: 'sub', step: it })
+  })
+  projects.forEach((p, i) => { loc.set(p.id, { proj: p, pi: i }); walk(p.line, { kind: 'project', proj: p }) })
+}
+const item = (id) => { const l = loc.get(id); return l?.it || l?.proj || null }
+const live = (it) => it.kind === 'fork' ? it.lanes.some((l) => l.line.some(live)) : it.state !== 'halt' && (it.state === 'todo' || (it.sub || []).some(live) || (it.line || []).some(live))
+const liveFrom = (line, i) => line.slice(i).some(live)
+const countTodo = (line) => line.reduce((a, it) => a + (it.kind === 'fork' ? it.lanes.reduce((b, l) => b + countTodo(l.line), 0) : (it.state === 'todo' ? 1 : 0) + countTodo(it.sub || [])), 0)
+const clip = (s, m) => (s.length > m ? s.slice(0, m - 1) + '…' : s)
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const hues = ['#2f81f7', '#a371f7', '#2da44e', '#db61a2', '#d4a72c', '#e16f24']
+const $ = (id) => document.getElementById(id)
+function projectOf(id) {
+  let l = loc.get(id)
+  while (l && !l.proj) { const o = l.owner; l = o.kind === 'project' ? loc.get(o.proj.id) : loc.get(o.kind === 'lane' ? o.fork.id : o.step.id) }
+  return l?.proj
+}
+/** Where a step sits on its walkthrough, in the words the AI receives. */
+function where(id) {
+  const l = loc.get(id)
+  if (l.proj) return l.proj.short
+  const parts = [`${clip(l.it.title, 18)}（第 ${l.idx + 1} 步）`]
+  let o = l.owner
+  while (o.kind !== 'project') {
+    if (o.kind === 'lane') { parts.unshift(o.lane.label); o = loc.get(o.fork.id).owner }
+    else { parts.unshift(clip(o.step.title, 14)); o = loc.get(o.step.id).owner }
+  }
+  parts.unshift(o.proj.short)
+  return parts.join(' › ')
+}
+/** For each line on the way to the focus, the index the walk reached in it. */
+function chainOf(id) {
+  const chain = new Map(); let cur = id
+  while (cur) {
+    const l = loc.get(cur); if (!l?.line) break
+    chain.set(l.line, l.idx)
+    cur = l.owner.kind === 'lane' ? l.owner.fork.id : l.owner.kind === 'sub' ? l.owner.step.id : null
+  }
+  return chain
+}
+
+// ═══════════════════════════ layout ═══════════════════════════
+const VG = 30, HG = 28, FP = 16, FT = 52, FB = 28
+const els = new Map(), B = new Map(), POS = new Map()
+let segs = [], frames = [], chain = new Map(), seen = new Set(), hue = hues[0]
+const ui = { project: 0, focus: null, edit: null, fresh: null, openRef: null }
+const visibleSub = (s) => (s.sub && s.sub.length && !s.fold ? s.sub : null)
+
+function ensure(id, cls, html, width) {
+  let el = els.get(id)
+  if (!el) { el = document.createElement('div'); el.dataset.id = id; $('world').appendChild(el); els.set(id, el) }
+  el.className = cls
+  if (width) el.style.width = width + 'px'
+  el.style.setProperty('--hue', hue)
+  if (!el.contains(document.activeElement) || document.activeElement.id !== 'edit') el.innerHTML = html
+  seen.add(id)
+  return el
+}
+const clipIcon = '<svg width="11" height="11" viewBox="0 0 16 16"><path d="M10.5 4.5 5.4 9.6a1.5 1.5 0 0 0 2.1 2.1l5.3-5.3a3 3 0 0 0-4.2-4.2L3.2 7.6a4.5 4.5 0 0 0 6.4 6.4l4.4-4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+function cardHtml(s) {
+  const t = ui.edit === s.id ? `<input class="edit" id="edit" value="${esc(s.title)}">` : `<div class="t">${s.q ? '<span class="q">?</span>' : ''}${esc(s.title || '（无标题）')}</div>`
+  const peek = s.body && (s.proj || s.id !== ui.focus) ? `<div class="peek">${esc(s.proj ? s.body : s.body.split('\n')[0])}</div>` : ''
+  const refs = s.refs.length ? `<span class="refs" data-refs="${s.id}">${clipIcon}${s.refs.slice(0, 2).map((r) => esc(clip(r.title, 11))).join(' · ')}${s.refs.length > 2 ? ' +' + (s.refs.length - 2) : ''}</span>` : ''
+  const sub = s.sub && s.sub.length ? `<span class="fold" data-fold="${s.id}">${s.fold ? '▸' : '▾'} ${s.sub.length} 步</span>` : ''
+  const open = s.proj ? countTodo(s.line) : 0
+  return `${t}${peek}<div class="foot">${refs}${sub}${open ? `<span style="color:var(--hue)">要做 ${open}</span>` : ''}</div>`
+}
+const cardCls = (s) => ['card', s.proj ? 'proj' : '', s.state, s.id === ui.focus ? 'sel' : '', s.id === ui.fresh ? 'fresh' : ''].join(' ')
+
+function reconcile(p) {
+  seen = new Set()
+  ensure(p.id, cardCls(p), cardHtml(p))
+  const walk = (line) => line.forEach((it) => {
+    if (it.kind === 'fork') {
+      if (it.title) ensure(it.id, 'forkt', esc(it.title))
+      it.lanes.forEach((ln) => { ensure(ln.id, 'lane' + (ln.line.some(live) ? '' : ' dead'), esc(ln.label)); walk(ln.line) })
+    } else { ensure(it.id, cardCls(it), cardHtml(it)); const s = visibleSub(it); if (s) walk(s) }
+  })
+  walk(p.line)
+  for (const [id, el] of els) if (!seen.has(id)) { el.remove(); els.delete(id) }
+}
+
+function mItem(it) { return it.kind === 'fork' ? mFork(it) : mStep(it) }
+function mLine(line) { let w = 0, h = 0; line.forEach((it, i) => { const b = mItem(it); w = Math.max(w, b.w); h += b.h + (i ? VG : 0) }); return { w, h } }
+function mStep(s) {
+  const el = els.get(s.id), cw = el.offsetWidth, ch = el.offsetHeight, sub = visibleSub(s)
+  let b = { w: cw, h: ch, cw, ch }
+  if (sub) { const L = mLine(sub); b = { w: Math.max(cw, L.w + 2 * FP), h: ch + VG + L.h + FP + 8, cw, ch, L } }
+  B.set(s.id, b); return b
+}
+function mFork(f) {
+  let w = 0, hmax = 0
+  f.lanes.forEach((ln, i) => {
+    const L = mLine(ln.line)
+    ln._w = Math.max(L.w, els.get(ln.id).offsetWidth + 20, 140); ln._h = L.h
+    w += ln._w + (i ? HG : 0); hmax = Math.max(hmax, L.h)
+  })
+  const b = { w, h: FT + hmax + FB }; B.set(f.id, b); return b
+}
+
+function elbow(x0, y0, x1, y1, my) {
+  if (Math.abs(x1 - x0) < 1) return `M${x0} ${y0} V${y1}`
+  const dir = Math.sign(x1 - x0), r = Math.max(0, Math.min(8, Math.abs(x1 - x0) / 2, my - y0, y1 - my))
+  return `M${x0} ${y0} V${my - r} Q${x0} ${my} ${x0 + dir * r} ${my} H${x1 - dir * r} Q${x1} ${my} ${x1} ${my + r} V${y1}`
+}
+const seg = (d, isLive, hot) => segs.push({ d, live: isLive, hot })
+const hotIn = (line, i, passed) => passed || (chain.has(line) && chain.get(line) >= i)
+
+function pLine(line, cx, top, passed) {
+  let y = top
+  line.forEach((it, i) => {
+    if (i > 0) seg(`M${cx} ${y - VG} V${y}`, liveFrom(line, i), hotIn(line, i, passed))
+    if (it.kind === 'fork') pFork(it, cx, y, line, i, passed); else pStep(it, cx, y, line, i, passed)
+    y += B.get(it.id).h + VG
+  })
+}
+function pStep(s, cx, y, line, i, passed) {
+  const b = B.get(s.id)
+  POS.set(s.id, { x: cx - b.cw / 2, y, w: b.cw, h: b.ch })
+  if (!b.L) return
+  const subPassed = passed || (chain.has(line) && chain.get(line) > i)
+  const onChain = subPassed || chain.has(s.sub)
+  const top = y + b.ch + VG
+  frames.push({ x: cx - b.w / 2, y: y + b.ch + VG / 2, w: b.w, h: b.h - b.ch - VG / 2, hot: onChain })
+  seg(`M${cx} ${y + b.ch} V${top}`, liveFrom(s.sub, 0), onChain)
+  pLine(s.sub, cx, top, subPassed)
+  seg(`M${cx} ${top + b.L.h} V${y + b.h}`, liveFrom(line, i + 1), subPassed)
+}
+function pFork(f, cx, y, line, i, passed) {
+  const b = B.get(f.id), ys = y + 12, ym = y + b.h - 12
+  const lanePassed = passed || (chain.has(line) && chain.get(line) > i)
+  let x0 = cx - b.w / 2
+  if (f.title) { const t = els.get(f.id); POS.set(f.id, { x: x0, y: ys - t.offsetHeight - 2 }) }
+  f.lanes.forEach((ln) => {
+    const lx = x0 + ln._w / 2, lab = els.get(ln.id), lw = lab.offsetWidth, lh = lab.offsetHeight
+    const hot = lanePassed || chain.has(ln.line), laneLive = ln.line.some(live)
+    POS.set(ln.id, { x: lx - lw / 2, y: ys + 6 })
+    seg(elbow(cx, y, lx, ys + 6, ys), laneLive, hot)
+    const top = y + FT
+    if (ln.line.length) seg(`M${lx} ${ys + 6 + lh} V${top}`, laneLive, hot)
+    pLine(ln.line, lx, top, lanePassed)
+    const end = ln.line.length ? top + ln._h : ys + 6 + lh
+    seg(elbow(lx, end, cx, y + b.h, ym), liveFrom(line, i + 1), lanePassed)
+    x0 += ln._w + HG
+  })
+}
+
+function render() {
+  index()
+  const p = projects[ui.project]
+  hue = hues[ui.project % hues.length]
+  document.documentElement.style.setProperty('--hue', hue)
+  reconcile(p)
+  B.clear(); POS.clear(); segs = []; frames = []
+  chain = ui.focus && loc.get(ui.focus)?.line ? chainOf(ui.focus) : new Map()
+  const pc = els.get(p.id), pw = pc.offsetWidth, ph = pc.offsetHeight
+  const L = mLine(p.line), cx = Math.max(pw, L.w) / 2
+  POS.set(p.id, { x: cx - pw / 2, y: 0 })
+  if (p.line.length) { seg(`M${cx} ${ph} V${ph + VG}`, liveFrom(p.line, 0), chain.has(p.line)); pLine(p.line, cx, ph + VG, false) }
+  for (const [id, el] of els) { const r = POS.get(id); if (r) el.style.transform = `translate(${r.x}px, ${r.y}px)` }
+  const fr = frames.map((f) => `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="14" fill="var(--frame)" stroke="${f.hot ? 'var(--muted)' : 'var(--line)'}" stroke-dasharray="4 4"/>`).join('')
+  const base = segs.map((s) => `<path d="${s.d}" stroke="${s.live ? hue : 'var(--dead)'}" stroke-width="2" fill="none"/>`).join('')
+  const hot = segs.filter((s) => s.hot).map((s) => `<path d="${s.d}" stroke="var(--ink)" stroke-width="3" fill="none" stroke-linecap="round"/>`).join('')
+  $('edges').innerHTML = fr + base + hot
+  ui.fresh = null
+  renderTabs(); renderDetail(); renderLog()
+  const ed = $('edit'); if (ed) { ed.focus(); ed.select() }
+}
+
+// ═══════════════════════════ side panel ═══════════════════════════
+function renderTabs() {
+  $('tabs').innerHTML = projects.map((p, i) => {
+    const n = countTodo(p.line)
+    return `<button class="tab ${live(p) ? '' : 'dead'}" role="tab" data-p="${i}" aria-selected="${i === ui.project}" style="--hue:${hues[i % hues.length]}">${esc(p.short)}${n ? `<span class="n">${n}</span>` : ''}</button>`
+  }).join('')
+}
+function refHtml(r) {
+  const open = ui.openRef === r.id || (r.refs || []).some((c) => c.id === ui.openRef)
+  return `<details class="ref ${ui.openRef === r.id ? 'hit' : ''}" ${open ? 'open' : ''}><summary>${esc(r.title)}</summary>` +
+    (r.body ? `<div class="rbody" contenteditable="plaintext-only" data-rb="${r.id}">${esc(r.body)}</div>` : '') +
+    (r.refs?.length ? r.refs.map(refHtml).join('') : '') + `</details>`
+}
+function renderDetail() {
+  const it = ui.focus && item(ui.focus)
+  if (!it || it.kind === 'fork') {
+    const p = projects[ui.project]
+    $('detail').innerHTML = `<div class="where">没有焦点：AI 只知道你在看「${esc(p.short)}」</div>`
+    return
+  }
+  const st = (v, l) => `<button data-st="${v}" aria-pressed="${it.state === v}">${l}</button>`
+  $('detail').innerHTML =
+    `<div class="where">${esc(where(it.id))}</div>` +
+    `<h2 data-act="rename" title="双击改名">${it.q ? '<span class="q">?</span>' : ''}${esc(it.title)}</h2>` +
+    `<div class="ctl"><span class="seg">${st('', '记录')}${st('todo', '要做')}${st('halt', '不用做')}</span>` +
+    (it.proj ? '' : `<button class="mini" data-act="q" aria-pressed="${it.q}">? 疑问</button>`) +
+    `<button class="mini" data-act="next">+ 下一步</button>` +
+    (it.proj ? '' : `<button class="mini" data-act="fork">${it.q ? '列出猜想' : '从这里分叉'}</button>`) + `</div>` +
+    `<div class="body" id="body" contenteditable="plaintext-only" spellcheck="false">${esc(it.body)}</div>` +
+    `<div class="refh"><b>参考</b><span>${it.refs.length || '还没有'}</span><button class="mini" data-act="ref">+ 参考</button></div>` +
+    it.refs.map(refHtml).join('')
+}
+
+// ═══════════════════════════ events → the session ═══════════════════════════
+// Every change is an event. The real panel posts it to the host, which appends it to
+// the log, emits it on the bus, and calls agent.inject(): queued, no model call,
+// delivered together with the next thing you say.
+const log = [
+  { k: 'inj', items: [{ type: 'view/focus', text: 'NAS→ZFS › 备份旧数据（第 1 步）' }] },
+  { k: 'user', text: '备份做完了，rsync 的结果记在哪' },
+  { k: 'ai', text: '挂成「备份旧数据」这一步的参考：命令一条，核对结果一条。这一步我标成不用做了。' },
+  { k: 'tool', type: 'step/state', text: 'NAS→ZFS › 备份旧数据 → 不用做' },
+]
+const queue = []
+function emit(type, text) {
+  // Looking around is not news: only the last focus before you speak is kept
+  // (the host replaces the pending message with agent.inbox.replace).
+  if (type === 'view/focus') { const i = queue.findIndex((e) => e.type === type); if (i >= 0) queue.splice(i, 1) }
+  queue.push({ type, text })
+}
+function renderLog() {
+  const html = log.map((e) => {
+    if (e.k === 'inj') return `<details class="inj"><summary>上下文注入 · 工作树 · ${e.items.length} 项</summary><ul>${e.items.map((i) => `<li><code>${i.type}</code> ${esc(i.text)}</li>`).join('')}</ul></details>`
+    if (e.k === 'tool') return `<div class="tool">✎ <code>${e.type}</code> ${esc(e.text)}</div>`
+    return `<div class="msg ${e.k}">${esc(e.text)}</div>`
+  }).join('')
+  const q = queue.length ? `<div class="queue">下一条消息会一起带上 ${queue.length} 项：<ul>${queue.map((i) => `<li><code>${i.type}</code> ${esc(i.text)}</li>`).join('')}</ul></div>` : ''
+  $('log').innerHTML = html + q
+  $('log').scrollTop = 1e9
+}
+
+// ═══════════════════════════ commands ═══════════════════════════
+const stateName = { '': '记录', todo: '要做', halt: '不用做' }
+function focus(id) {
+  if (ui.focus !== id && id) emit('view/focus', where(id) + (item(id).refs.length ? `（参考 ${item(id).refs.length} 条）` : ''))
+  ui.focus = id; ui.openRef = null
+  render(); if (id) reveal(id)
+}
+function setState(it, s) { if (!it || it.state === s) return; it.state = s; emit('step/state', `${where(it.id)} → ${stateName[s]}`); render() }
+function toggleQ(it) { if (!it || it.proj) return; it.q = !it.q; emit('step/edited', `${where(it.id)} ${it.q ? '标成疑问' : '不再是疑问'}`); render() }
+function insertAfter(id, thing) { const l = loc.get(id); if (l.proj) l.proj.line.push(thing); else l.line.splice(l.idx + 1, 0, thing) }
+function addNext(id) { const s = S(''); s.isNew = true; insertAfter(id, s); ui.focus = s.id; ui.edit = s.id; render(); reveal(s.id) }
+function addSub(id) {
+  const it = item(id); if (it.proj) return addNext(id)
+  const s = S(''); s.isNew = true; (it.sub = it.sub || []).push(s); it.fold = false
+  ui.focus = s.id; ui.edit = s.id; render(); reveal(s.id)
+}
+function forkAfter(id) {
+  const it = item(id)
+  const names = (prompt(it.q ? '有哪几个猜想？用逗号隔开' : '分成哪几条？用逗号隔开', it.q ? '猜想 A, 猜想 B' : '方案 A, 方案 B') || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+  if (names.length < 2) return
+  const f = F(names.map((n) => [n, [S('待验证', todo)]]), it.q ? '猜想' : '')
+  insertAfter(id, f); index()
+  emit('fork/created', `${where(id)} 之后分成 ${names.join(' / ')}`)
+  ui.focus = f.lanes[0].line[0].id; render(); reveal(ui.focus)
+}
+function addRef(it) {
+  const title = (prompt('参考的标题（命令、链接、代码位置……）', '') || '').trim(); if (!title) return
+  const r = R(title); it.refs.push(r); ui.openRef = r.id
+  emit('ref/created', `${where(it.id)} 挂上参考「${clip(title, 20)}」`); render()
+}
+function reorder(id, d) {
+  const l = loc.get(id); if (!l.line) return
+  const j = l.idx + d; if (j < 0 || j >= l.line.length) return
+  l.line.splice(l.idx, 1); l.line.splice(j, 0, l.it)
+  emit('step/moved', `${where(id)} ${d < 0 ? '提前' : '推后'}一步`); render(); reveal(id)
+}
+function commitEdit(value, cancel) {
+  const it = item(ui.edit); ui.edit = null; if (!it) return render()
+  const text = value.trim()
+  if (it.isNew) {
+    delete it.isNew
+    const l = loc.get(it.id)
+    if (cancel || !text) { l.line.splice(l.idx, 1); ui.focus = null; return render() }
+    it.title = text; index(); emit('step/created', where(it.id)); emit('view/focus', where(it.id))
+  } else if (!cancel && text && text !== it.title) { emit('step/edited', `「${clip(it.title, 16)}」改名为「${clip(text, 16)}」`); it.title = text }
+  render(); $('view').focus()
+}
+function flat() {
+  const p = projects[ui.project], out = [p]
+  const walk = (line) => line.forEach((it) => { if (it.kind === 'fork') it.lanes.forEach((ln) => walk(ln.line)); else { out.push(it); const s = visibleSub(it); if (s) walk(s) } })
+  walk(p.line); return out
+}
+function laneHop(id, d) {
+  const l = loc.get(id); if (!l?.owner || l.owner.kind !== 'lane') return
+  const lanes = l.owner.fork.lanes, k = lanes.indexOf(l.owner.lane) + d
+  const ln = lanes[k]; if (ln?.line.length) focus(ln.line[Math.min(l.idx, ln.line.length - 1)].id)
+}
+
+// ═══════════════════════════ camera ═══════════════════════════
+const cam = { x: 0, y: 0, s: 0.92 }
+function applyCam(glide) {
+  const w = $('world'); w.classList.toggle('glide', !!glide)
+  w.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.s})`
+  $('zoom').textContent = Math.round(cam.s * 100) + '%'
+}
+function reveal(id, force) {
+  const el = els.get(id), p = POS.get(id); if (!el || !p) return
+  const v = $('view').getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight
+  const sx = cam.x + p.x * cam.s, sy = cam.y + p.y * cam.s, m = 50
+  if (!force && sx > m && sy > m && sx + w * cam.s < v.width - m && sy + h * cam.s < v.height - m) return
+  cam.x = v.width / 2 - (p.x + w / 2) * cam.s; cam.y = v.height * 0.55 - (p.y + h / 2) * cam.s
+  applyCam(true)
+}
+function fit() {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (const [id, p] of POS) { const el = els.get(id); if (!el) continue; x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + el.offsetWidth); y1 = Math.max(y1, p.y + el.offsetHeight) }
+  const v = $('view').getBoundingClientRect()
+  cam.s = Math.max(0.3, Math.min(1, (v.width - 80) / (x1 - x0), (v.height - 60) / (y1 - y0)))
+  cam.x = (v.width - (x1 - x0) * cam.s) / 2 - x0 * cam.s; cam.y = 30 - y0 * cam.s
+  applyCam(true)
+}
+
+// ═══════════════════════════ input ═══════════════════════════
+let pan = null, moved = false
+$('view').addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.target.closest('.card, .lane')) return
+  pan = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; moved = false; $('view').classList.add('panning')
+})
+window.addEventListener('pointermove', (e) => {
+  if (!pan) return
+  if (Math.hypot(e.clientX - pan.x, e.clientY - pan.y) > 3) moved = true
+  cam.x = pan.cx + e.clientX - pan.x; cam.y = pan.cy + e.clientY - pan.y; applyCam(false)
+})
+window.addEventListener('pointerup', () => { if (pan) { pan = null; $('view').classList.remove('panning') } })
+$('view').addEventListener('click', (e) => {
+  const f = e.target.closest('[data-fold]'); if (f) { const s = item(f.dataset.fold); s.fold = !s.fold; render(); return }
+  const r = e.target.closest('[data-refs]'); if (r) { focus(r.dataset.refs); ui.openRef = item(r.dataset.refs).refs[0]?.id; renderDetail(); return }
+  if (e.target.closest('input')) return
+  const card = e.target.closest('.card'); if (card) return focus(card.dataset.id)
+  if (!moved && !e.target.closest('.lane')) { ui.focus = null; render() }
+})
+$('view').addEventListener('dblclick', (e) => {
+  const lane = e.target.closest('.lane')
+  if (lane) { const ln = loc.get(lane.dataset.id).lane; const v = (prompt('支线名', ln.label) || '').trim(); if (v && v !== ln.label) { emit('fork/edited', `支线「${ln.label}」改名为「${v}」`); ln.label = v; render() } return }
+  const card = e.target.closest('.card'); if (card) { ui.edit = card.dataset.id; render() }
+})
+$('view').addEventListener('wheel', (e) => {
+  e.preventDefault()
+  if (e.ctrlKey) {
+    const v = $('view').getBoundingClientRect(), mx = e.clientX - v.left, my = e.clientY - v.top
+    const s = Math.max(0.3, Math.min(1.6, cam.s * Math.exp(-e.deltaY * 0.0015)))
+    cam.x = mx - (mx - cam.x) * (s / cam.s); cam.y = my - (my - cam.y) * (s / cam.s); cam.s = s
+  } else { cam.x -= e.shiftKey ? e.deltaY : e.deltaX; cam.y -= e.shiftKey ? 0 : e.deltaY }
+  applyCam(false)
+}, { passive: false })
+$('view').addEventListener('focusout', (e) => { if (e.target.id === 'edit' && ui.edit) commitEdit(e.target.value, false) })
+$('view').addEventListener('keydown', (e) => {
+  if (e.target.id === 'edit') {
+    if (e.key === 'Enter') { e.preventDefault(); commitEdit(e.target.value, false) }
+    if (e.key === 'Escape') { e.preventDefault(); commitEdit(e.target.value, true) }
+    return
+  }
+  const list = flat(), it = ui.focus ? item(ui.focus) : null, i = it ? list.indexOf(it) : -1, k = e.key.toLowerCase()
+  if (k === 'arrowup' && e.altKey && it) reorder(it.id, -1)
+  else if (k === 'arrowdown' && e.altKey && it) reorder(it.id, 1)
+  else if (k === 'arrowdown') { if (list[i + 1]) focus(list[i + 1].id) }
+  else if (k === 'arrowup') { if (i > 0) focus(list[i - 1].id) }
+  else if (k === 'arrowleft' && it) laneHop(it.id, -1)
+  else if (k === 'arrowright' && it) laneHop(it.id, 1)
+  else if (!it) return
+  else if (k === 'enter' && (e.ctrlKey || e.metaKey)) addNext(it.id)
+  else if (k === 'enter') { ui.edit = it.id; render() }
+  else if (k === 'tab') addSub(it.id)
+  else if (k === 'y' && !it.proj) forkAfter(it.id)
+  else if (k === 'q') toggleQ(it)
+  else if (k === 't') setState(it, it.state === 'todo' ? 'halt' : 'todo')
+  else if (k === 'n') setState(it, '')
+  else if (k === ' ') { if (it.sub?.length) { it.fold = !it.fold; render() } }
+  else return
+  e.preventDefault()
+})
+
+$('detail').addEventListener('click', (e) => {
+  const it = item(ui.focus); if (!it) return
+  const st = e.target.closest('[data-st]'); if (st) return setState(it, st.dataset.st)
+  const a = e.target.closest('[data-act]')?.dataset.act
+  if (a === 'q') toggleQ(it)
+  if (a === 'next') addNext(it.id)
+  if (a === 'fork') forkAfter(it.id)
+  if (a === 'ref') addRef(it)
+})
+$('detail').addEventListener('dblclick', (e) => { if (e.target.closest('[data-act="rename"]')) { ui.edit = ui.focus; render() } })
+$('detail').addEventListener('focusout', (e) => {
+  const it = item(ui.focus); if (!it) return
+  if (e.target.id === 'body' && e.target.innerText !== it.body) { it.body = e.target.innerText; emit('step/edited', `${where(it.id)} 的正文`); render() }
+  const rb = e.target.dataset?.rb
+  if (rb) {
+    const find = (rs) => { for (const r of rs) { if (r.id === rb) return r; const c = find(r.refs || []); if (c) return c } }
+    const r = find(it.refs); if (r && r.body !== e.target.innerText) { r.body = e.target.innerText; emit('ref/edited', `${where(it.id)} 的参考「${clip(r.title, 16)}」`); renderLog() }
+  }
+})
+$('tabs').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-p]'); if (!t) return
+  ui.project = +t.dataset.p; ui.focus = null; emit('view/focus', projects[ui.project].short); render(); fit()
+})
+$('home').addEventListener('click', () => ui.focus && reveal(ui.focus, true))
+$('fit').addEventListener('click', fit)
+$('form').addEventListener('submit', (e) => {
+  e.preventDefault()
+  const text = $('input').value.trim(); if (!text) return
+  $('input').value = ''
+  if (queue.length) log.push({ k: 'inj', items: queue.splice(0) })
+  log.push({ k: 'user', text }); renderLog()
+  const it = ui.focus && item(ui.focus)
+  setTimeout(() => {
+    if (!it || it.kind === 'fork') { log.push({ k: 'ai', text: '（原型，没接模型）' }); return renderLog() }
+    const r = R(clip(text, 30), '（AI 记下的排查过程）'); it.refs.push(r); ui.openRef = r.id
+    log.push({ k: 'ai', text: `（原型，没接模型）上下文是「${where(it.id)}」和上面注入的几项。先把这件事挂成这一步的参考。` })
+    log.push({ k: 'tool', type: 'ref/created', text: `${where(it.id)} 挂上参考「${clip(text, 20)}」` })
+    ui.fresh = it.id; render()
+  }, 500)
+})
+
+// ═══════════════════════════ start ═══════════════════════════
+index()
+if (location.hash === "#blog") ui.project = 1
+const start = location.hash === "#blog" ? projects[1].line[0].sub[1] : projects[0].line[2].lanes[1].line[1] // 博客 › 文章迁移与验收 › 第 2 步 | NAS→ZFS › nas-b › 换盘
+ui.focus = start.id
+emit('view/focus', where(start.id))
+render()
+reveal(start.id, true)
+$('view').focus()
+</script>
+</body>
+</html>

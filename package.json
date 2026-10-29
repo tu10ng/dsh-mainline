@@ -1,0 +1,29 @@
+{
+  "name": "dsh-mainline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Engineering walkthroughs for DeepSeek Harness: a main line of steps, forks that run side by side and merge back, references hung on each step — plain Markdown files under git, shared with one ordinary DSH conversation that hears every click.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": ">=0.2.1-rc.1 <0.3.0"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["lib", "cordis.patch.yml", "docs", "LICENSE", "README.md", "CLAUDE.md"],
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "verify": "npm run check && npm test",
+    "dev": "node tools/dev-server.mjs"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "immediately": true }
+  }
+}

@@ -1,0 +1,1186 @@
+{
+  "projects": [
+    {
+      "file": "homelab.md",
+      "root": {
+        "id": "hl01",
+        "kind": "project",
+        "title": "NAS 迁移到 ZFS",
+        "state": "halt",
+        "question": false,
+        "body": "把家里的 NAS 从旧的 ext4 + mdadm 阵列迁到 ZFS：两台机器（nas-a 做主、nas-b 做备份），数据先备份、再建池、再导回，最后验证重启后自动挂载。",
+        "attrs": {},
+        "children": [
+          {
+            "id": "hl02",
+            "kind": "ref",
+            "title": "设计笔记",
+            "state": "",
+            "question": false,
+            "body": "存放选型笔记：为什么选 raidz1 而不是镜像，快照策略与保留周期，以及回滚预案的链接。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl03",
+            "kind": "ref",
+            "title": "磁盘清单",
+            "state": "",
+            "question": false,
+            "body": "三块旧盘（2×4T + 1×2T）和两块新盘（各 8T），分别标注型号、通电时长与 SMART 状态。",
+            "attrs": {},
+            "children": [
+              {
+                "id": "hl04",
+                "kind": "ref",
+                "title": "旧阵列",
+                "state": "",
+                "question": false,
+                "body": "mdadm 的 RAID1，挂载在 /mnt/old，容量 3.6T，已用 2.1T。",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "hl05",
+                "kind": "ref",
+                "title": "新盘",
+                "state": "",
+                "question": false,
+                "body": "两块 8T 的 CMR 盘，装在 nas-a；购买记录见设计笔记。",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "hl06",
+                "kind": "ref",
+                "title": "zpool 布局",
+                "state": "",
+                "question": false,
+                "body": "nas-a 用 raidz1，nas-b 用单盘 + 定期 send/recv。",
+                "attrs": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "hl07",
+            "kind": "ref",
+            "title": "(cmd) 状态",
+            "state": "",
+            "question": false,
+            "body": "查看池、数据集与磁盘健康的常用命令：\n\n```bash\nzpool status\nzfs list -o name,used,avail\nsmartctl -a /dev/sda\n```",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl08",
+            "kind": "ref",
+            "title": "回滚预案",
+            "state": "",
+            "question": false,
+            "body": "旧阵列在迁移完成两周内不拆，必要时把 /mnt/old 重新挂回即可。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl09",
+            "kind": "ref",
+            "title": "参考",
+            "state": "",
+            "question": false,
+            "body": "OpenZFS 文档与社区里关于 ashift、recordsize 的讨论链接。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl10",
+            "kind": "step",
+            "title": "备份旧数据",
+            "state": "",
+            "question": false,
+            "body": "先把 /mnt/old 整体备份到外接硬盘，核对文件数量，再动任何一块盘。",
+            "attrs": {},
+            "children": [
+              {
+                "id": "hl11",
+                "kind": "ref",
+                "title": "备份位置",
+                "state": "",
+                "question": false,
+                "body": "外接硬盘挂载在 /mnt/usb，目录按日期命名。",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "hl12",
+                "kind": "ref",
+                "title": "rsync 参数",
+                "state": "",
+                "question": false,
+                "body": "先用 --dry-run 看一遍会拷什么：\n\n```bash\nrsync -aHv --dry-run /mnt/old/ /tank/data/\n```",
+                "attrs": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "hl13",
+            "kind": "step",
+            "title": "盘位与接线",
+            "state": "",
+            "question": false,
+            "body": "确认每块盘对应的接口和线序，避免装反。",
+            "attrs": {},
+            "children": [
+              {
+                "id": "hl14",
+                "kind": "ref",
+                "title": "盘位图",
+                "state": "",
+                "question": false,
+                "body": "机箱前面板从左到右依次是 sda、sdb、sdc。",
+                "attrs": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "hl20",
+            "kind": "fork",
+            "title": "两台机器",
+            "state": "",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": [
+              {
+                "id": "hl21",
+                "kind": "lane",
+                "title": "nas-a",
+                "state": "",
+                "question": false,
+                "body": "主力机，装两块新盘，建 raidz1 池并承载全部数据。",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "hl22",
+                    "kind": "step",
+                    "title": "装盘",
+                    "state": "",
+                    "question": false,
+                    "body": "关机、装盘、开机，确认系统识别到新盘。",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "hl23",
+                        "kind": "ref",
+                        "title": "盘位",
+                        "state": "",
+                        "question": false,
+                        "body": "新盘插在第 4、5 个盘位。\n\n```bash\nlsblk -f\n```",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "hl24",
+                    "kind": "step",
+                    "title": "建池",
+                    "state": "",
+                    "question": false,
+                    "body": "用 by-id 路径建池，ashift 设为 12。",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "hl25",
+                        "kind": "ref",
+                        "title": "建池命令",
+                        "state": "",
+                        "question": false,
+                        "body": "建好以后立刻看状态：\n\n```bash\nzpool status\n```",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "hl26",
+                    "kind": "step",
+                    "title": "导入数据",
+                    "state": "",
+                    "question": false,
+                    "body": "把备份导回 tank/data，先 dry-run 再正式拷。",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "hl27",
+                        "kind": "ref",
+                        "title": "rsync",
+                        "state": "",
+                        "question": false,
+                        "body": "```bash\nrsync -aHv --dry-run /mnt/old/ /tank/data/\n```",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "hl28",
+                    "kind": "step",
+                    "title": "验证",
+                    "state": "",
+                    "question": false,
+                    "body": "看池状态、容量，再抽查几个大文件的校验和。",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "hl29",
+                        "kind": "ref",
+                        "title": "test",
+                        "state": "",
+                        "question": false,
+                        "body": "```bash\nzfs list -o name,used,avail\ndf -h\n```",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "hl31",
+                "kind": "lane",
+                "title": "nas-b",
+                "state": "",
+                "question": false,
+                "body": "备份机，沿用旧盘，只做 send/recv 的目标。",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "hl32",
+                    "kind": "step",
+                    "title": "清点旧盘",
+                    "state": "",
+                    "question": false,
+                    "body": "把旧盘逐块接上，记录型号与序列号。",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "hl33",
+                    "kind": "step",
+                    "title": "换盘",
+                    "state": "",
+                    "question": false,
+                    "body": "2T 的那块 SMART 有重分配扇区，换成新盘。",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "hl34",
+                        "kind": "ref",
+                        "title": "smart 报告",
+                        "state": "",
+                        "question": false,
+                        "body": "换盘前后的报告都存档：\n\n```bash\nsmartctl -a /dev/sda\n```",
+                        "attrs": {},
+                        "children": []
+                      },
+                      {
+                        "id": "hl35",
+                        "kind": "ref",
+                        "title": "校验",
+                        "state": "",
+                        "question": false,
+                        "body": "换盘后跑一次 scrub，确认没有校验错误。",
+                        "attrs": {},
+                        "children": [
+                          {
+                            "id": "hl36",
+                            "kind": "ref",
+                            "title": "校验清单",
+                            "state": "",
+                            "question": false,
+                            "body": "scrub 结束后记录错误数与耗时。",
+                            "attrs": {},
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "hl37",
+                    "kind": "step",
+                    "title": "内核日志",
+                    "state": "",
+                    "question": false,
+                    "body": "看换盘时内核有没有报链路错误。\n\n```bash\ndmesg | grep -i ata\n```",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "hl38",
+                    "kind": "step",
+                    "title": "验证",
+                    "state": "",
+                    "question": false,
+                    "body": "```bash\nlsblk -f\nzpool status\n```",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "hl40",
+            "kind": "step",
+            "title": "调整挂载点",
+            "state": "",
+            "question": false,
+            "body": "把 /tank/data 挂回原来的路径，更新 fstab 和共享配置。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl41",
+            "kind": "step",
+            "title": "增加迁移日志",
+            "state": "",
+            "question": false,
+            "body": "每一步的命令和输出都记到迁移日志里，方便事后复盘。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl42",
+            "kind": "step",
+            "title": "确认 ashift 是否设为 12",
+            "state": "halt",
+            "question": true,
+            "body": "确认过：两块新盘都是 4K 扇区，建池时显式指定 ashift=12，zpool get ashift tank 返回 12。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl43",
+            "kind": "step",
+            "title": "评审快照策略，复核容量",
+            "state": "halt",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": [
+              {
+                "id": "hl44",
+                "kind": "ref",
+                "title": "遗留问题",
+                "state": "",
+                "question": false,
+                "body": "快照保留周期还没定，先按每天一份保留七天。",
+                "attrs": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "hl45",
+            "kind": "step",
+            "title": "验证重启后自动挂载",
+            "state": "halt",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "hl46",
+            "kind": "step",
+            "title": "收尾",
+            "state": "halt",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": []
+          }
+        ],
+        "preamble": ""
+      }
+    },
+    {
+      "file": "blog.md",
+      "root": {
+        "id": "bl01",
+        "kind": "project",
+        "title": "博客换静态站点生成器",
+        "state": "",
+        "question": false,
+        "body": "把个人博客从旧的动态博客程序迁到静态站点生成器：文章转换、图片与代码高亮、部署，以及迁移过程里暴露的问题。",
+        "attrs": {},
+        "children": [
+          {
+            "id": "bl02",
+            "kind": "ref",
+            "title": "迁移清单",
+            "state": "",
+            "question": false,
+            "body": "文章数量、分类、固定链接格式，以及需要保留的旧地址。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bl03",
+            "kind": "ref",
+            "title": "issue #12",
+            "state": "",
+            "question": false,
+            "body": "正文仍是空模板，只有一个标题。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bl10",
+            "kind": "step",
+            "title": "文章迁移与验收",
+            "state": "",
+            "question": false,
+            "body": "转换 → 构建基线 → 对齐页面 → 图片 / 文本 / 代码高亮。",
+            "attrs": {},
+            "children": [
+              {
+                "id": "bl11",
+                "kind": "step",
+                "title": "转换文章",
+                "state": "halt",
+                "question": false,
+                "body": "已转换。",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "bl12",
+                "kind": "step",
+                "title": "构建时间测试",
+                "state": "todo",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "bl13",
+                "kind": "step",
+                "title": "同一批文章换主题，对比之前的构建时间",
+                "state": "todo",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "bl14",
+                "kind": "step",
+                "title": "按迁移清单逐项对齐页面",
+                "state": "todo",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "bl15",
+                "kind": "fork",
+                "title": "三种内容",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bl16",
+                    "kind": "lane",
+                    "title": "图片",
+                    "state": "",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "bl17",
+                        "kind": "step",
+                        "title": "压缩 + 尺寸",
+                        "state": "todo",
+                        "question": false,
+                        "body": "",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "bl18",
+                    "kind": "lane",
+                    "title": "文本",
+                    "state": "",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "bl19",
+                        "kind": "step",
+                        "title": "排版 + 目录",
+                        "state": "todo",
+                        "question": false,
+                        "body": "",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "bl20",
+                    "kind": "lane",
+                    "title": "代码高亮",
+                    "state": "",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "bl21",
+                        "kind": "step",
+                        "title": "样式 + 行号",
+                        "state": "todo",
+                        "question": false,
+                        "body": "",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bl30",
+            "kind": "fork",
+            "title": "迁移里暴露的问题",
+            "state": "",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": [
+              {
+                "id": "bl31",
+                "kind": "lane",
+                "title": "构建",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bl32",
+                    "kind": "step",
+                    "title": "单篇文章实际渲染一遍，看生成的 HTML",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl33",
+                    "kind": "step",
+                    "title": "增量构建对模板改动的正确性",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl34",
+                    "kind": "step",
+                    "title": "逐字比对",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "bl35",
+                "kind": "lane",
+                "title": "性能",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bl36",
+                    "kind": "step",
+                    "title": "首页加载慢只是因为图片没压缩？",
+                    "state": "todo",
+                    "question": true,
+                    "body": "假设，未证实。",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl37",
+                    "kind": "step",
+                    "title": "列表页一次渲染所有文章",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl38",
+                    "kind": "step",
+                    "title": "缩略图没有按需生成",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": [
+                      {
+                        "id": "bl39",
+                        "kind": "ref",
+                        "title": "PR #5",
+                        "state": "",
+                        "question": false,
+                        "body": "",
+                        "attrs": {},
+                        "children": []
+                      },
+                      {
+                        "id": "bl40",
+                        "kind": "ref",
+                        "title": "PR #8",
+                        "state": "",
+                        "question": false,
+                        "body": "",
+                        "attrs": {},
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "bl41",
+                    "kind": "step",
+                    "title": "首次访问慢是 CDN 冷启动？",
+                    "state": "todo",
+                    "question": true,
+                    "body": "假设，未证实。",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "bl42",
+                "kind": "lane",
+                "title": "链接",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bl43",
+                    "kind": "step",
+                    "title": "旧文章的固定链接",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl44",
+                    "kind": "step",
+                    "title": "RSS 地址",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl45",
+                    "kind": "step",
+                    "title": "站内引用",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl46",
+                    "kind": "step",
+                    "title": "外链检查",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl47",
+                    "kind": "step",
+                    "title": "404 页面",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl48",
+                    "kind": "step",
+                    "title": "评论系统迁移",
+                    "state": "halt",
+                    "question": false,
+                    "body": "挂起。",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl49",
+                    "kind": "step",
+                    "title": "站内搜索",
+                    "state": "halt",
+                    "question": false,
+                    "body": "挂起。",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "bl50",
+                "kind": "lane",
+                "title": "样式",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bl51",
+                    "kind": "step",
+                    "title": "深色模式",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl52",
+                    "kind": "step",
+                    "title": "移动端排版",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl53",
+                    "kind": "step",
+                    "title": "打印样式",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "bl54",
+                "kind": "lane",
+                "title": "流程债",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bl55",
+                    "kind": "step",
+                    "title": "部署脚本里写死了路径",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl56",
+                    "kind": "step",
+                    "title": "构建缓存没有清理，旧文件残留",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl57",
+                    "kind": "step",
+                    "title": "草稿分支没有合并到主分支",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  },
+                  {
+                    "id": "bl58",
+                    "kind": "step",
+                    "title": "改了配置没有更新文档",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bl60",
+            "kind": "step",
+            "title": "验证本批改动不影响旧站点",
+            "state": "todo",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bl61",
+            "kind": "step",
+            "title": "正式切换域名",
+            "state": "todo",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": []
+          }
+        ],
+        "preamble": ""
+      }
+    },
+    {
+      "file": "backup.md",
+      "root": {
+        "id": "bk01",
+        "kind": "project",
+        "title": "备份脚本加固",
+        "state": "halt",
+        "question": false,
+        "body": "夜间备份脚本偶尔没有产出，且没有任何告警；先查原因，再让脚本在失败时明确报错。",
+        "attrs": {},
+        "children": [
+          {
+            "id": "bk02",
+            "kind": "ref",
+            "title": "设计",
+            "state": "",
+            "question": false,
+            "body": "指向备份方案的笔记，遗留疑问：脚本是否在磁盘满时静默退出。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bk03",
+            "kind": "ref",
+            "title": "日志",
+            "state": "",
+            "question": false,
+            "body": "脚本的日志在 /var/log/backup.log，logrotate 每周轮转。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bk04",
+            "kind": "ref",
+            "title": "code",
+            "state": "",
+            "question": false,
+            "body": "梳理调用链：backup.sh → run_rsync → verify_snapshot，以及退出码与锁文件的约定。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bk10",
+            "kind": "step",
+            "title": "磁盘满时脚本是否静默退出",
+            "state": "todo",
+            "question": true,
+            "body": "遗留疑问。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bk11",
+            "kind": "fork",
+            "title": "两个猜想",
+            "state": "",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": [
+              {
+                "id": "bk12",
+                "kind": "lane",
+                "title": "cron 没跑",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bk13",
+                    "kind": "step",
+                    "title": "待验证",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "bk14",
+                "kind": "lane",
+                "title": "脚本提前退出",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "bk15",
+                    "kind": "step",
+                    "title": "待验证",
+                    "state": "todo",
+                    "question": false,
+                    "body": "",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bk20",
+            "kind": "step",
+            "title": "把读取配置的函数提出来",
+            "state": "halt",
+            "question": false,
+            "body": "重构点：读取配置的函数应提取为公共脚本。",
+            "attrs": {},
+            "children": []
+          },
+          {
+            "id": "bk21",
+            "kind": "step",
+            "title": "测试",
+            "state": "",
+            "question": false,
+            "body": "",
+            "attrs": {},
+            "children": [
+              {
+                "id": "bk22",
+                "kind": "ref",
+                "title": "test",
+                "state": "",
+                "question": false,
+                "body": "通过下面的命令验证备份是否产出：\n\n```bash\ndf -h\nls -l /mnt/usb\n```",
+                "attrs": {},
+                "children": []
+              }
+            ]
+          }
+        ],
+        "preamble": ""
+      }
+    },
+    {
+      "file": "printer.md",
+      "root": {
+        "id": "pr01",
+        "kind": "project",
+        "title": "打印机驱动重复注册",
+        "state": "halt",
+        "question": false,
+        "body": "系统里同一台打印机出现了两份，原因是驱动被两个服务重复注册。",
+        "attrs": {},
+        "children": [
+          {
+            "id": "pr02",
+            "kind": "step",
+            "title": "分析",
+            "state": "",
+            "question": false,
+            "body": "定位为两个服务各自注册了一次。",
+            "attrs": {},
+            "children": [
+              {
+                "id": "pr03",
+                "kind": "ref",
+                "title": "日志摘录",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "pr04",
+                "kind": "ref",
+                "title": "cups.log",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "pr05",
+            "kind": "step",
+            "title": "改法",
+            "state": "",
+            "question": false,
+            "body": "讨论结论：只保留一个服务负责注册，另一个改成只读取队列，无需额外依赖。",
+            "attrs": {},
+            "children": [
+              {
+                "id": "pr06",
+                "kind": "ref",
+                "title": "补丁说明",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": []
+              },
+              {
+                "id": "pr07",
+                "kind": "ref",
+                "title": "code",
+                "state": "",
+                "question": false,
+                "body": "给出注册函数、队列名与去重判断的位置。",
+                "attrs": {},
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "pr08",
+            "kind": "fork",
+            "title": "分两部分验证",
+            "state": "",
+            "question": false,
+            "body": "分注册与打印两部分验证。",
+            "attrs": {},
+            "children": [
+              {
+                "id": "pr09",
+                "kind": "lane",
+                "title": "注册",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "pr10",
+                    "kind": "step",
+                    "title": "打印机不再重复出现",
+                    "state": "",
+                    "question": false,
+                    "body": "验证重启服务后队列里只有一份。",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "pr11",
+                "kind": "lane",
+                "title": "打印",
+                "state": "",
+                "question": false,
+                "body": "",
+                "attrs": {},
+                "children": [
+                  {
+                    "id": "pr12",
+                    "kind": "step",
+                    "title": "打印测试页",
+                    "state": "",
+                    "question": false,
+                    "body": "通过测试页验证打印正常。",
+                    "attrs": {},
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "preamble": ""
+      }
+    },
+    {
+      "file": "cleanup.md",
+      "root": {
+        "id": "cl01",
+        "kind": "project",
+        "title": "清理旧配置",
+        "state": "halt",
+        "question": false,
+        "body": "清理旧配置文件，无具体内容记录。",
+        "attrs": {},
+        "children": [],
+        "preamble": ""
+      }
+    },
+    {
+      "file": "router.md",
+      "root": {
+        "id": "rt01",
+        "kind": "project",
+        "title": "路由器固件升级后菜单残留",
+        "state": "halt",
+        "question": false,
+        "body": "固件升级后管理页面里还留着旧菜单，需要清理，无具体内容记录。",
+        "attrs": {},
+        "children": [],
+        "preamble": ""
+      }
+    }
+  ]
+}
