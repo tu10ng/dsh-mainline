@@ -564,6 +564,10 @@ test('Shift+Tab: overview → contents → show all → overview, skipping views
   same(modes, ['overview', 'contents', 'all', 'overview'])
   const contentsView = T.globalFold(root, 'contents')
   assert.equal(T.nextGlobalFold(root, contentsView, null).mode, 'overview', 'after anything else, Shift+Tab starts at the overview')
+  // The toolbar button reads the view off the screen, so its clicks go on through the cycle.
+  assert.equal(T.globalModeOf(root, contentsView), 'contents')
+  assert.equal(T.nextGlobalFold(root, contentsView, T.globalModeOf(root, contentsView)).mode, 'all')
+  assert.equal(T.globalModeOf(root, { ...contentsView, head: 'open' }), null, 'a mix of the reader’s own')
   const overview = T.computeFolds(root, T.globalFold(root, 'overview'))
   assert.equal(overview.get('lq').lineShown, false, 'overview folds lanes')
   assert.equal(overview.get('proj').lineShown, true, 'the main line stays visible')
