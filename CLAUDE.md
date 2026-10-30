@@ -22,8 +22,8 @@ unclear. So each project here is:
 - **reference** — commands, code locations, register values, links, design docs hung on a step.
   Looked up, not followed: **never drawn as part of the line**;
 - **chapter** — a step can carry its own sub-line;
-- **question** — a `?` step. While open it is `todo`; the answer goes into its body and it becomes
-  `halt`. Competing hypotheses become a fork.
+- **question** — a `?` step. While open it is a record (`todo` when it needs special
+  attention); the answer goes into its body and it becomes `halt`. Competing hypotheses become a fork.
 
 **One rule at every level, no limits, no patches.** The project's line, a chapter and a lane are
 the same thing and behave the same way; none is the only one. A project can hold several unrelated
@@ -32,9 +32,11 @@ thing next to a project's first step: "没说只能有一个主线啊" — then 
 the model cannot express something, generalize the rule; never add a flag or a concept that only
 works in one place.
 
-States are exactly three: record (`''`), `todo`, `halt`. **`halt` means "no longer to do" — done
-or paused, deliberately not distinguished.** This is the user's own habit and a hard rule: do not
-add `done`, `doing`, `cancelled`, priorities or due dates.
+States are exactly four (the user's 2026-10-30 rule): record (`''`); `todo` — only what needs special
+attention (a follow-up task that does not is a record, not `todo`); `halt` —
+progress, "this step was walked" (done or stopped, deliberately not distinguished), so most recorded
+steps are `halt`; `done` — only in lists such as an SR list, "this item is met". Do not add
+`doing`, `cancelled`, priorities or due dates.
 
 Rejected on purpose, with the reason the user gave:
 - a list/outline panel with indentation (still linearizes);
@@ -102,10 +104,12 @@ their contexts apart.
 
 ## UI style (hard)
 
-- **Monochrome.** Black/white body, greys. Theme tokens only (`--dsw-alias-*`, mixed with
-  `color-mix()` where a token is too faint); a hex or `rgb()` literal in `lib/client.js` fails
-  `npm run check`. The error token is used only for errors — not even for "delete".
-- `todo`: a 3 px bar on the card's left edge. `halt`: dimmed title, dashed border, no shadow.
+- **Monochrome but for the state keywords.** Black/white body, greys. Theme tokens only
+  (`--dsw-alias-*`, mixed with `color-mix()` where a token is too faint); a hex or `rgb()` literal
+  in `lib/client.js` fails `npm run check`. The error token is used only for errors — not even for
+  "delete". The only hues are the org-mode keywords before a title: `TODO` pink, `HALT` amber,
+  `DONE` green (`--ml-todo/halt/done`).
+- `todo`: a 3 px pink bar on the card's left edge. `halt`/`done`: dimmed title, dashed border, no shadow.
   `?`: a small outlined question mark. Selected: strong border and lift; the path from the project
   to the selection is drawn in the ink colour. Non-live segments: dashed and faint.
 - Lanes side by side, references never on the line, chapters in a faint dashed frame.

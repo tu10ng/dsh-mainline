@@ -95,7 +95,7 @@ test('validation uses the SPEC codes', async () => {
   await assert.rejects(() => create({ title: 'x'.repeat(301) }), { code: 'invalid-title' })
   await assert.rejects(() => create({ title: 5 }), { code: 'invalid-title' })
   await assert.rejects(() => create({ body: 'x'.repeat(100_001) }), { code: 'invalid-content' })
-  await assert.rejects(() => create({ state: 'done' }), { code: 'invalid-state' })
+  await assert.rejects(() => create({ state: 'doing' }), { code: 'invalid-state' })
   await assert.rejects(() => create({ attrs: { a: 'x\ny' } }), { code: 'invalid-attrs' })
   await assert.rejects(() => create({ attrs: { 'bad key': 'x' } }), { code: 'invalid-attrs' })
   await assert.rejects(() => create({ attrs: { a: 1 } }), { code: 'invalid-attrs' })
@@ -316,7 +316,7 @@ test('removeProject deletes the file (kept in the trash), reorderProjects reorde
 test('listProjects summarizes counts; where, locate and readMarkdown work from the cache', async () => {
   const { service } = await rig()
   await apply(service, { type: 'update', project: 'proj', id: 's1', patch: { state: 'todo' } })
-  assert.deepEqual(service.listProjects()[0], { id: 'proj', file: 'homelab.md', title: 'Homelab', state: '', todo: 1, halt: 0, steps: 4 })
+  assert.deepEqual(service.listProjects()[0], { id: 'proj', file: 'homelab.md', title: 'Homelab', state: '', todo: 1, halt: 0, done: 0, steps: 4 })
   assert.equal(service.where('proj', 's2'), 'Homelab › 两台机器 › nas-a › nas-a 步骤（第 1 步）')
   assert.equal(service.where('proj', 'zzzz'), '')
   assert.equal(service.where('nope', 's2'), '')

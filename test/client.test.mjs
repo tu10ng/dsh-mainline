@@ -392,6 +392,7 @@ test('the walk to the selection is hot; dead segments are not live', () => {
   assert.ok(tail.filter((edge) => edge.hot).length > hot.length, 'a selection after the fork passes every lane')
   assert.equal(T.isLive(root.children.find((c) => c.id === 'done')), false)
   assert.equal(T.isLive(root.children.find((c) => c.id === 'fk')), true)
+  assert.equal(T.isLive(step('sr', { state: 'done', children: [step('x', { state: 'todo' })] })), false)
 })
 
 test('lane folding collapses one lane and keeps the merge', () => {

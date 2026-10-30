@@ -68,7 +68,7 @@ test('append and cwd travel to the service as locked patch fields; body+append i
 
 test('an invalid state is a typed failure, not a throw', async () => {
   const { run } = setup()
-  const result = await run('mainline_add', { project: 'p1', kind: 'step', title: 'x', state: 'done' })
+  const result = await run('mainline_add', { project: 'p1', kind: 'step', title: 'x', state: 'doing' })
   assert.equal(result.ok, false)
   assert.equal(result.reason, 'invalid-state')
 })

@@ -220,6 +220,8 @@ body {
   --dsw-alias-border-l1: rgba(0, 0, 0, 0.04);
   --dsw-alias-border-l2: rgba(0, 0, 0, 0.1);
   --dsw-alias-state-error-primary: rgb(236, 19, 19);
+  --dsw-alias-state-warn-label: rgb(221, 134, 41);
+  --dsw-alias-state-success-primary: rgb(34, 197, 94);
 }
 body[data-ds-dark-theme] {
   --dsw-alias-label-primary: rgb(249, 250, 251);
@@ -230,6 +232,8 @@ body[data-ds-dark-theme] {
   --dsw-alias-border-l1: rgba(255, 255, 255, 0.06);
   --dsw-alias-border-l2: rgba(255, 255, 255, 0.12);
   --dsw-alias-state-error-primary: rgb(242, 90, 90);
+  --dsw-alias-state-warn-label: rgb(221, 134, 41);
+  --dsw-alias-state-success-primary: rgb(34, 197, 94);
 }
 html, body { height: 100%; margin: 0; }
 body { display: flex; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);

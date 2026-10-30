@@ -35,7 +35,7 @@ function sample() {
 
 test('KINDS and STATES are the contract lists', () => {
   assert.deepEqual([...KINDS], ['project', 'step', 'fork', 'lane', 'ref'])
-  assert.deepEqual([...STATES], ['', 'todo', 'halt'])
+  assert.deepEqual([...STATES], ['', 'todo', 'halt', 'done'])
 })
 
 test('canContain follows the SPEC 1.2 table exactly', () => {
@@ -71,6 +71,8 @@ test('isLive: todo steps, containers of them, never through a halted step or a r
 
   const halted = n('step', 'h', { state: 'halt', children: [n('step', 'inside', { state: 'todo' })] })
   assert.equal(isLive(halted), false)
+  const done = n('step', 'd', { state: 'done', children: [n('step', 'inside', { state: 'todo' })] })
+  assert.equal(isLive(done), false)
   const holder = n('step', 'p', { children: [n('ref', 'r', { state: 'todo' })] })
   assert.equal(isLive(holder), false)
   const chapter = n('step', 'p', { children: [n('step', 'c', { children: [n('step', 'deep', { state: 'todo' })] })] })
@@ -125,10 +127,11 @@ test('newId: 4 chars [a-z0-9], registered, unique, grows on collisions', () => {
   assert.ok(Set.prototype.has.call(crowded, id))
 })
 
-test('counts: steps only for todo/halt/steps, questions over every node', () => {
+test('counts: steps only for todo/halt/done/steps, questions over every node', () => {
   const root = sample()
-  assert.deepEqual(counts(root), { todo: 2, halt: 1, steps: 6, questions: 1 })
-  assert.deepEqual(counts(n('project', 'empty', { state: 'todo' })), { todo: 0, halt: 0, steps: 0, questions: 0 })
+  assert.deepEqual(counts(root), { todo: 2, halt: 1, done: 0, steps: 6, questions: 1 })
+  assert.deepEqual(counts(n('project', 'empty', { state: 'todo' })), { todo: 0, halt: 0, done: 0, steps: 0, questions: 0 })
+  assert.equal(counts(n('project', 'P', { children: [n('step', 'sr', { state: 'done' })] })).done, 1)
   const q = n('project', 'q', { children: [n('ref', 'r', { question: true }), n('step', 's', { question: true })] })
   assert.equal(counts(q).questions, 2)
 })
@@ -184,7 +187,7 @@ test('makeNode fills defaults, registers ids and validates', () => {
   assert.notEqual(clash.id, 'fixd')
   assert.equal(makeNode({ kind: 'project', title: 'P' }).preamble, '')
   assert.throws(() => makeNode({ kind: 'bogus', title: 'x' }), { code: 'invalid-kind' })
-  assert.throws(() => makeNode({ kind: 'step', title: 'x', state: 'done' }), { code: 'invalid-state' })
+  assert.throws(() => makeNode({ kind: 'step', title: 'x', state: 'doing' }), { code: 'invalid-state' })
   assert.throws(() => makeNode(null), { code: 'invalid-op' })
   const withAttrs = makeNode({ kind: 'project', title: 'P', attrs: { cwd: 'D:/x' }, state: 'todo', question: 1 })
   assert.deepEqual(withAttrs.attrs, { cwd: 'D:/x' })

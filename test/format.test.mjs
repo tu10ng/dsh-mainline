@@ -264,10 +264,10 @@ const stepOf = (id, title, body = '', extra = {}) => ({
 
 test('titles that look like markers or attribute blocks survive', () => {
   const titles = [
-    'TODO x', 'HALT x', 'REF x', 'FORK x', '? x', '?', 'TODO', '\\TODO x', '\\', '\\\\x', 'x {a}', '{a}', 'x \\{a}', 'x {#id}',
+    'TODO x', 'HALT x', 'DONE x', 'REF x', 'FORK x', '? x', '?', 'TODO', 'DONE', '\\TODO x', '\\', '\\\\x', 'x {a}', '{a}', 'x \\{a}', 'x {#id}',
     'x {a="b c"}', 'ends with \\', 'a } b', 'a { b', '# hash', '#', 'TODO ? REF x', '"quoted"', 'REF', 'FORK',
   ]
-  for (const state of ['', 'todo', 'halt']) {
+  for (const state of ['', 'todo', 'halt', 'done']) {
     for (const question of [false, true]) {
       const kids = titles.map((t, i) => stepOf(`s${String(i).padStart(3, '0')}`, t, '', { state, question }))
       const root = rootWith(kids)
@@ -398,7 +398,7 @@ function randomTree(seed) {
       id: `n${(counter += 1).toString(36).padStart(4, '0')}`,
       kind,
       title: randomTitle(r),
-      state: r() < 0.5 ? '' : r() < 0.5 ? 'todo' : 'halt',
+      state: r() < 0.5 ? '' : ['todo', 'halt', 'done'][Math.floor(r() * 3)],
       question: r() < 0.15,
       body: randomBody(r),
       attrs: {},
