@@ -7,8 +7,9 @@ something here is wrong or missing, say so in your report instead of silently di
 `docs/prototype/mainline.html` is the approved interaction prototype (open it in a browser). The
 product idea, in the user's words: a game walkthrough. A *video* walkthrough has a **main line** you
 follow; a *wiki* has every detail but no line. A work item here is a walkthrough: a main line of
-steps, **forks** where the line splits into lanes that run side by side and merge back (two
-environments, two competing hypotheses), and **references** (commands, code locations, register
+steps, **forks** where the line splits into lanes that run side by side and merge back into what
+follows (two environments, two competing hypotheses — or, with nothing following, several unrelated
+things in one project), and **references** (commands, code locations, register
 values, links, design docs) hanging off a step — looked up, not followed, and never drawn as part of
 the line.
 
@@ -60,12 +61,18 @@ The project root node additionally carries `preamble: string` (text before its H
 |---|---|---|
 | project | step, fork, ref | non-ref children in order = the **main line**; refs = project references |
 | step | step, fork, ref | non-ref children = the step's **chapter** (a sub-line); refs = its references |
-| fork | lane, ref | each lane runs side by side; after the last item of every lane the line merges back |
+| fork | lane, ref | each lane runs side by side; after the last item of every lane the line merges back into what follows the fork — with nothing following, the lanes run to their own ends |
 | lane | step, fork, ref | the lane's own line |
 | ref | ref | nested references |
 
 Derived (never stored): `refsOf(n) = n.children.filter(c => c.kind === 'ref')`,
 `lineOf(n) = n.children.filter(c => c.kind !== 'ref')`.
+**Every line is a line** — the project's, a chapter, a lane: the same rules everywhere, and none
+is the only one. A line can split anywhere, its head included, so a project can hold several
+unrelated things side by side (a fork at the head of the project's line). **Lanes merge into
+whatever follows them; with nothing following, they run to their own ends and never merge.**
+"Following" looks all the way out: a fork ending a chapter merges into the frame when that step
+has something after it, and runs open when the step itself is the end of an open line.
 `state` is meaningful for project and step; it is preserved but ignored for fork, lane and ref.
 A **live** item is a step whose state is `todo`, or anything that contains one (not inside a
 `halt` step). The UI greys out non-live lines.
@@ -329,6 +336,7 @@ Ops (`op.type`), validated strictly (unknown keys → `invalid-op`):
 | `remove` | `project, id` | returns the removed subtree in `removed` (for undo) |
 | `insert` | `project, parent, after?, node` | re-inserts a subtree (undo of remove); ids that now collide are regenerated |
 | `fork` | `project, after, title?, lanes: string[]` | inserts a fork right after step `after` in the same line, one empty lane per name (≥ 2 names) |
+| `branch` | `project, parent, title, state?, question?, body?` | a new step **beside** `parent`'s line rather than after it — the way to put another thing next to a line. A line that is nothing but one fork gets one more lane; any other line is split: its items, untouched (ids kept, two levels deeper), into an unnamed lane, the step into a second unnamed lane; into an empty line it is simply the first step. References stay with `parent`. Returns the step's id. |
 | `createProject` | `title, body?, markdown?` | `markdown` = a whole file to start from (import); returns the project id in `nodeId` |
 | `removeProject` | `project` | deletes the file (git keeps it) |
 | `renameProject` | `project, title` | title only; file name stays |
@@ -376,7 +384,8 @@ conversation" creates one, so every plugin, tool, approval and model picker work
   text: c => c.agent?.id === id ? GUIDANCE_FULL : GUIDANCE_SHORT })`. Write GUIDANCE in
   `lib/prompt.js`. It must teach: the tree is the user's engineering record across **many
   projects**; each project is a walkthrough (main line, forks for parallel environments/hypotheses
-  that merge back, references for lookup material, `?` for doubts); the focus context says which
+  that merge back into what follows — or, at the head of a line with nothing following, unrelated
+  things side by side — references for lookup material, `?` for doubts); the focus context says which
   project/step the user is on — keep projects apart, never mix their context, ask when unsure which
   project a remark belongs to; record findings where they belong (a result → the step's body or a
   ref; a new doubt → a `?` step; competing hypotheses → a fork); `halt` means "no longer to do"
@@ -425,6 +434,7 @@ The actor is `{ kind: 'agent', session: exec?.agent?.id }`. States on the wire a
 | `mainline_move` | `project, id, parent, after?` | `{ ok, where }` |
 | `mainline_remove` | `project, id` | `{ ok, removed: { title, count } }` |
 | `mainline_fork` | `project, after, lanes, title?` | `{ ok, id, lanes: [{ id, title }] }` |
+| `mainline_branch` | `project, parent?, title, state?, question?, body?` | `{ ok, id, where }` — the `branch` op; `parent` omitted = the project |
 | `mainline_write` | `project, node?, markdown` | `{ ok, rev }` — replace a subtree (or the whole project) with Markdown in the file format; ids present are kept |
 | `mainline_create_project` | `title, body?, markdown?` | `{ ok, id, file }` |
 | `mainline_history` | `project?, limit?` | `{ ok, commits }` |
@@ -507,6 +517,8 @@ conversation layout are approved by the user — keep them.
 
 Canvas layout: port the prototype's algorithm (`mLine`/`mStep`/`mFork` measure, `pLine`/`pStep`/
 `pFork` place, `elbow` edges, chapter frames). Lanes are **selectable and foldable** like cards.
+A fork with nothing following it (1.2) draws no merge: each lane ends at its last item and the
+block is as tall as its tallest lane.
 
 ### 5.2 Look — monochrome
 
@@ -539,12 +551,20 @@ Defaults: steps with a chapter `folded`, lanes `open`, everything else `folded`.
 
 - Click a card or a lane pill → select (and `POST focus`, debounced 300 ms). Click empty canvas →
   deselect.
-- Double-click a title → rename inline (Enter saves, Esc cancels).
+- Double-click a title → rename inline (Enter saves, Esc cancels). Double-click the body of an
+  `open` card (not a link, button, checkbox or code) → edit it in place with the same raw-Markdown
+  textarea as the detail column (5.6), as tall as its wrapped text up to the body's own cap
+  (560 px), so editing never shows less than the rendered body did.
 - **Ctrl+Enter** → add a next step after the selection (same line) and rename it inline. An empty
   title on Enter/blur removes the new card.
 - ↑ / ↓ → previous / next item in visual order; ← / → → the same position in the neighbouring lane.
   Alt+↑ / Alt+↓ → reorder within the line. Enter → rename. Delete → remove, with an 8 s undo toast
   (`insert` op with the `removed` subtree).
+- Alt+→ / Alt+← → a level in / out, org-style, the subtree moving along (one `move` op; steps and
+  forks only). In: the last step of the previous item's chapter — after a fork, the end of its last
+  lane. Out: right after the parent step — from a lane, right after the fork (where the lanes merge
+  back). A folded chapter it goes into opens. Nowhere to go → a short toast. Alt+← is always
+  claimed on the canvas: it is also the browser's Back.
 - Ctrl+X → cut the selection (mark it); Ctrl+V on a target → move it after the target;
   Ctrl+Shift+V → move it into the target as the last child.
 - **Free dragging**: drag a card (or lane pill) anywhere; it and everything drawn beneath it
@@ -556,10 +576,20 @@ Defaults: steps with a chapter `folded`, lanes `open`, everything else `folded`.
   on a card — 加下一步 (Ctrl+Enter) · 加子步骤 · 从这里分叉… · 加参考 · 要做 / 不用做 / 记录 ·
   标为疑问 / 取消疑问 · 交给 AI 继续 · 剪切 (Ctrl+X) / 粘贴为下一步 (Ctrl+V) / 粘贴为子步骤 ·
   恢复位置 (R) · 删除 (Del); on a lane — 改名 · 加一条支线 · 删除这条支线 · 恢复位置;
-  on empty canvas — 在主线末尾加一步 · 全部折叠 / 全部展开 · 适应窗口.
+  on empty canvas — 另起一条线 · 在项目末尾加一步 · 全部折叠 / 全部展开 · 适应窗口.
+  **另起一条线** (on a card, the project card included, and on a lane as 在这条支线里再分) puts a
+  draft card right away **beside** that card's line — no form, nothing to name — and its title
+  makes a `branch` op. On the project card it is the first item and **Ctrl+Enter**: a new thing
+  in a project stands beside what is there; 在项目末尾加一步 is the other way to grow it. Otherwise
+  the project card has the step card's items, minus those that need a line around it (加下一步,
+  从这里分叉, cut, 恢复位置, 删除).
+  An unnamed lane draws as a small dot where the line splits (double-click to name it); unnamed
+  forks and lanes add nothing to the detail crumbs or to `where`.
   "从这里分叉…" opens a small inline form (lane names, comma separated), never `window.prompt`.
-- Canvas: drag empty space to pan, wheel to scroll, Ctrl+wheel to zoom (0.3–1.6) around the
-  pointer, F → fit, 回到焦点 → centre the selection.
+- Canvas: drag empty space to pan; the wheel zooms (0.3–1.6) around the pointer, and so do
+  Ctrl+wheel and a trackpad pinch; Shift+wheel or a sideways wheel pans sideways. A box in a card
+  that scrolls along the wheel (body, code, table, run output) keeps the wheel, even at its end.
+  F → fit, 回到焦点 → centre the selection.
 - View state (fold, offsets, camera) is saved per project via `POST view`, debounced 600 ms.
 
 ### 5.5 Markdown and commands

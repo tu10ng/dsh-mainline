@@ -154,6 +154,9 @@ test('describePath: the short example from the spec, clipping and untitled forks
   const anon = n('project', 'P', { children: [n('fork', '', { id: 'f0', children: [n('lane', 'L', { id: 'l0', children: [n('step', 'x'.repeat(30), { id: 's0' })] })] })] })
   assert.equal(describePath(anon, 's0'), `P › L › ${'x'.repeat(23)}…（第 1 步）`)
   assert.equal(describePath(anon, 'f0'), 'P › （分叉）')
+  const bare = n('project', 'P', { children: [n('fork', '', { children: [n('lane', '', { id: 'l9', children: [n('step', '另一件事', { id: 's9' })] })] })] })
+  assert.equal(describePath(bare, 's9'), 'P › 另一件事（第 1 步）', 'an unnamed lane is only a split too')
+  assert.equal(describePath(bare, 'l9'), 'P › （未命名）', 'but the lane itself still has a label')
 
   const deepStep = n('step', 'y'.repeat(25), { id: 'd1', children: [n('step', 'inner', { id: 'd2' })] })
   assert.equal(describePath(n('project', 'P', { children: [deepStep] }), 'd2'), `P › ${'y'.repeat(17)}… › inner（第 1 步）`)

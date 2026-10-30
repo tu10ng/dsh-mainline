@@ -166,11 +166,13 @@ test('update accepts append and setAttrs, computed under the lock, and refuses t
   for (let i = 0; i < 8; i += 1) assert.ok(body.includes(`并发${i}`))
 })
 
-test('an empty title is refused except on a fork', async () => {
+test('an empty title is refused except on a fork or a lane (both only split a line)', async () => {
   const { service } = await rig()
   await assert.rejects(() => apply(service, { type: 'update', project: 'proj', id: 's1', patch: { title: ' ' } }), { code: 'invalid-title' })
   await apply(service, { type: 'update', project: 'proj', id: 'f1', patch: { title: '' } })
   assert.equal(service.locate('proj', 'f1').node.title, '')
+  await apply(service, { type: 'update', project: 'proj', id: 'l1', patch: { title: '' } })
+  assert.equal(service.locate('proj', 'l1').node.title, '')
 })
 
 test('move reorders, re-parents, and refuses what the model could use to corrupt the tree', async () => {
@@ -236,6 +238,31 @@ test('fork inserts a fork after a step with one empty lane per name', async () =
   await assert.rejects(() => apply(service, { type: 'fork', project: 'proj', after: 'd1', lanes: ['a', 'b'] }), { code: 'invalid-kind' })
   await assert.rejects(() => apply(service, { type: 'fork', project: 'proj', after: 'l1', lanes: ['a', 'b'] }), { code: 'invalid-kind' })
   await assert.rejects(() => apply(service, { type: 'fork', project: 'proj', after: 's1', lanes: ['a', ' '] }), { code: 'invalid-title' })
+})
+
+test('branch: a step beside a line, nothing to name; the next one joins the same split', async () => {
+  const { service } = await rig()
+  const before = service.locate('proj', 'proj').node.children.filter((c) => c.kind !== 'ref').map((c) => c.id)
+  const one = await apply(service, { type: 'branch', project: 'proj', parent: 'proj', title: '另一件事' })
+  const root = service.locate('proj', 'proj').node
+  assert.deepEqual(root.children.map((c) => c.kind), ['ref', 'fork'])
+  const fork = root.children[1]
+  assert.deepEqual(fork.children.map((l) => [l.kind, l.title]), [['lane', ''], ['lane', '']], 'two unnamed lanes')
+  assert.deepEqual(fork.children[0].children.map((c) => c.id), before, 'the old line, untouched, in the first lane')
+  assert.deepEqual(fork.children[1].children.map((c) => c.id), [one.nodeId])
+  assert.match(one.events[0].summary, /另起一条线：Homelab › 另一件事（第 1 步）（原来的 3 项放进旁边那条）/)
+  const two = await apply(service, { type: 'branch', project: 'proj', parent: 'proj', title: '第三件事', state: 'todo' })
+  assert.equal(root.children.length, 2, 'no fork inside a fork: the same split grows')
+  const again = service.locate('proj', 'proj').node.children[1]
+  assert.equal(again.id, fork.id)
+  assert.deepEqual(again.children.map((l) => l.children[0]?.id), [before[0], one.nodeId, two.nodeId])
+  assert.equal(service.locate('proj', two.nodeId).node.state, 'todo')
+  // An empty chapter: beside nothing is just its first step, no split.
+  await apply(service, { type: 'remove', project: 'proj', id: 'c1' })
+  const lone = await apply(service, { type: 'branch', project: 'proj', parent: 's1', title: '单独一条' })
+  assert.deepEqual(service.locate('proj', 's1').node.children.map((c) => c.id), [lone.nodeId])
+  await assert.rejects(() => apply(service, { type: 'branch', project: 'proj', parent: 'd1', title: 'x' }), { code: 'invalid-kind' })
+  await assert.rejects(() => apply(service, { type: 'branch', project: 'proj', parent: 'proj', title: ' ' }), { code: 'invalid-title' })
 })
 
 test('createProject: a title makes a file, markdown imports, ids are unique across projects', async () => {

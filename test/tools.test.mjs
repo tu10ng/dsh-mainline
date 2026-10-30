@@ -12,11 +12,11 @@ const setup = () => {
 }
 const EXEC = { agent: { id: 'session-9' } }
 
-test('eleven tools with the contract names and definition shape', () => {
+test('twelve tools with the contract names and definition shape', () => {
   const { tools } = setup()
   assert.deepEqual(tools.map((t) => t.name), [
     'mainline_projects', 'mainline_read', 'mainline_add', 'mainline_update', 'mainline_move', 'mainline_remove',
-    'mainline_fork', 'mainline_write', 'mainline_create_project', 'mainline_history', 'mainline_restore',
+    'mainline_fork', 'mainline_branch', 'mainline_write', 'mainline_create_project', 'mainline_history', 'mainline_restore',
   ])
   for (const t of tools) {
     assert.equal(typeof t.description, 'string')
@@ -78,6 +78,13 @@ test('remove reports the subtree size; fork lists lanes', async () => {
   assert.deepEqual((await run('mainline_remove', { project: 'p1', id: 'x' })).removed, { title: '被删', count: 2 })
   const fork = await run('mainline_fork', { project: 'p1', after: 's1', lanes: ['a', 'b'] })
   assert.deepEqual(fork.lanes, [{ id: 'l1', title: 'nas-b' }])
+})
+
+test('mainline_branch starts a line beside the project’s by default', async () => {
+  const { service, run } = setup()
+  await run('mainline_branch', { project: 'p1', title: '另一件事', state: 'todo' }, EXEC)
+  const op = service.calls.at(-1)[1]
+  assert.deepEqual([op.type, op.parent, op.title, op.state], ['branch', 'p1', '另一件事', 'todo'])
 })
 
 test('create_project, write, history and restore pass through the service', async () => {

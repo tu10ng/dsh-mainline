@@ -96,7 +96,7 @@ const violationsOf = (schema) => {
 
 test('every tool schema stays inside the Host subset', () => {
   const tools = createTools({ service: makeService() })
-  assert.equal(tools.length, 11)
+  assert.equal(tools.length, 12)
   for (const tool of tools) {
     for (const [label, schema] of [['parameters', tool.parameters], ['output.schema', tool.output.schema]]) {
       const violations = violationsOf(schema)

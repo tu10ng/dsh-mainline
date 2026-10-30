@@ -135,13 +135,13 @@ after(async () => {
   await host?.close()
 })
 
-test('the plugin registers eleven tools and the routes, and /health reports git and the projects', async () => {
-  assert.equal(host.tools.length, 11)
+test('the plugin registers twelve tools and the routes, and /health reports git and the projects', async () => {
+  assert.equal(host.tools.length, 12)
   const health = await host.data('GET', '/health')
   assert.equal(health.git.available, true)
   assert.equal(health.projects, 2)
   assert.equal(health.root, root)
-  assert.equal(health.tools.registered.length, 11)
+  assert.equal(health.tools.registered.length, 12)
 })
 
 test('/projects lists the seeded files in order; /project returns the full tree', async () => {

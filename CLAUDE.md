@@ -17,12 +17,20 @@ unclear. So each project here is:
 
 - **main line** — the steps you follow, top to bottom (`lineOf(node)`);
 - **fork** — the line splits into **lanes** drawn side by side (two environments, two competing
-  hypotheses, so they can be compared at a glance) and **merges back** below the longest lane;
+  hypotheses, so they can be compared at a glance) and **merges back** into whatever follows,
+  below the longest lane. With nothing following, the lanes run to their own ends;
 - **reference** — commands, code locations, register values, links, design docs hung on a step.
   Looked up, not followed: **never drawn as part of the line**;
 - **chapter** — a step can carry its own sub-line;
 - **question** — a `?` step. While open it is `todo`; the answer goes into its body and it becomes
   `halt`. Competing hypotheses become a fork.
+
+**One rule at every level, no limits, no patches.** The project's line, a chapter and a lane are
+the same thing and behave the same way; none is the only one. A project can hold several unrelated
+things side by side: its line split at the head. The user, on finding they could not add a second
+thing next to a project's first step: "没说只能有一个主线啊" — then "不要限制, 也不要打补丁". When
+the model cannot express something, generalize the rule; never add a flag or a concept that only
+works in one place.
 
 States are exactly three: record (`''`), `todo`, `halt`. **`halt` means "no longer to do" — done
 or paused, deliberately not distinguished.** This is the user's own habit and a hard rule: do not

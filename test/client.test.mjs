@@ -404,43 +404,150 @@ test('lane folding collapses one lane and keeps the merge', () => {
   assert.equal(T.laneNeighbour(root, 'q3', -1, T.computeFolds(root, {})), 'v1', 'the same row, clamped to the shorter lane')
 })
 
-// ------------------------------------------------------------------ folding
-
-test('Tab cycles folded → open → all → folded and skips states that change nothing', () => {
+test('Alt+→ goes under the previous step, Alt+← comes back out after the parent', () => {
   const root = sample()
-  const leaf = T.nextFold(root, {}, 'head')
-  assert.equal(leaf.state, 'open', 'a body opens')
-  assert.equal(T.nextFold(root, leaf.fold, 'head').state, 'folded', 'all is the same as open for a leaf: skipped')
-
-  let fold = {}
-  const states = []
-  for (let i = 0; i < 3; i += 1) {
-    const result = T.nextFold(root, fold, 'model')
-    states.push(result.state)
-    fold = result.fold
-  }
-  same(states, ['open', 'folded', 'open'], 'model has no body and no grandchildren: open == all')
-
-  const deep = node('project', 'p', { id: 'p', children: [step('s', { id: 's', children: [step('t', { id: 't', body: 'x' })] })] })
-  const cycle = []
-  fold = {}
-  for (let i = 0; i < 4; i += 1) {
-    const result = T.nextFold(deep, fold, 's')
-    cycle.push(result.state)
-    fold = result.fold
-  }
-  same(cycle, ['open', 'all', 'folded', 'open'])
-
-  const nothing = T.nextFold(root, {}, 'lua')
-  assert.equal(nothing.changed, false, 'no body, no line: Tab is a no-op')
+  const into = (id) => T.indentTarget(root, id, 1)
+  const out = (id) => T.indentTarget(root, id, -1)
+  same(into('model'), { parent: 'head' }, 'the end of the previous step’s chapter')
+  same(into('trap'), { parent: 'attr' }, 'inside a chapter too')
+  same(into('fk'), { parent: 'model' }, 'a fork goes along like a step')
+  same(into('lua'), { parent: 'lq' }, 'after a fork: the end of its last lane')
+  same(into('head'), { reason: 'first' }, 'a reference before it is not a step')
+  same(into('q1'), { reason: 'first' })
+  same(out('attr'), { parent: 'proj', after: 'model' }, 'right after the parent step')
+  same(out('q3'), { parent: 'proj', after: 'fk' }, 'out of a lane: after the fork, where the lanes merge')
+  same(out('head'), { reason: 'top' })
+  for (const id of ['lq', 'refb', 'proj', 'nope']) same(into(id), { reason: 'kind' }, id)
 })
 
-test('Tab under a "show all" folds the node instead of doing nothing', () => {
+/** A project split at its head: the old line in one lane, an unrelated thing in another. */
+function splitProject() {
+  serial = 100
+  return node('project', 'LWD', {
+    id: 'proj',
+    children: [
+      ref('设计文档', { id: 'refa' }),
+      fork('', [
+        lane('A2 验收', [step('部署', { id: 'a1' }), step('验收', { id: 'a2', state: 'todo' }), step('性能', { id: 'a3' })], { id: 'la' }),
+        lane('另一件事', [step('它的第一步', { id: 'b1', state: 'todo' })], { id: 'lb' }),
+      ], { id: 'fk' }),
+    ],
+  })
+}
+
+const endsAt = (edges, point) => edges.filter((edge) => {
+  const { end } = endpoints(edge.d)
+  return Math.abs(end.x - point.x) < 0.5 && Math.abs(end.y - point.y) < 0.5
+})
+const startsAt = (edges, point) => edges.filter((edge) => {
+  const { start } = endpoints(edge.d)
+  return Math.abs(start.x - point.x) < 0.5 && Math.abs(start.y - point.y) < 0.5
+})
+
+test('lanes with nothing after them run to their own ends: no merge, no line after', () => {
+  const root = splitProject()
+  const { boxes, edges } = place(root)
+  assert.ok(boxes.lb.x > boxes.la.x + boxes.la.w, 'side by side')
+  same([boxes.a1.y, boxes.b1.y], [boxes.a1.y, boxes.a1.y], 'both lines start level')
+  for (const id of ['a3', 'b1']) {
+    const bottom = { x: boxes[id].x + boxes[id].w / 2, y: boxes[id].y + boxes[id].h }
+    same(startsAt(edges, bottom), [], `${id} ends its lane: nothing leaves it`)
+  }
+  assert.ok(place(root).bounds.y1 <= boxes.a3.y + 40 + 0.5, 'no merge gap below the longest lane')
+  // Something after the split makes it merge again: the next step is reached from both lanes.
+  root.children.push(step('都做完以后', { id: 'after' }))
+  const merged = place(root)
+  const top = { x: merged.boxes.after.x + merged.boxes.after.w / 2, y: merged.boxes.after.y }
+  assert.ok(merged.boxes.after.y > merged.boxes.a3.y + 40, 'below the longest lane')
+  const merge = endpoints(endsAt(merged.edges, top)[0].d).start
+  assert.equal(merged.edges.filter((edge) => {
+    const { end } = endpoints(edge.d)
+    return Math.abs(end.x - merge.x) < 0.5 && Math.abs(end.y - merge.y) < 0.5
+  }).length, 2, 'both lanes merge, then the line goes on')
+})
+
+test('an open end is open all the way down: a chapter or a lane ending in a split does not merge either', () => {
   const root = sample()
-  const result = T.nextFold(root, { proj: 'all' }, 'model')
+  // The last main-line item gets a chapter that ends in a split; nothing follows it anywhere.
+  const tail = root.children.find((child) => child.id === 'done')
+  tail.children = [fork('', [lane('x', [step('x1', { id: 'x1' })], { id: 'lx' }), lane('y', [step('y1', { id: 'y1' })], { id: 'ly' })], { id: 'fz' })]
+  const { boxes, edges } = place(root, { fold: { done: 'children' } })
+  for (const id of ['x1', 'y1']) same(startsAt(edges, { x: boxes[id].x + boxes[id].w / 2, y: boxes[id].y + boxes[id].h }), [], `${id} leads nowhere`)
+  // The fork in the middle of the main line still merges into 修改 lua.
+  const lua = { x: boxes.lua.x + boxes.lua.w / 2, y: boxes.lua.y }
+  assert.equal(endsAt(edges, lua).length, 1)
+  // A split in a chapter that is followed (head's chapter, then model) merges back into the frame.
+  const head = root.children.find((child) => child.id === 'head')
+  head.children.push(fork('', [lane('p', [step('p1', { id: 'p1' })], { id: 'lp' }), lane('q', [step('q9', { id: 'q9' })], { id: 'lq9' })], { id: 'fh' }))
+  const followed = place(root, { fold: { head: 'children' } })
+  assert.ok(startsAt(followed.edges, { x: followed.boxes.p1.x + followed.boxes.p1.w / 2, y: followed.boxes.p1.y + followed.boxes.p1.h }).length > 0, 'p1 merges: the chapter is followed by model')
+})
+
+// ------------------------------------------------------------------ folding
+
+/** Presses Tab on `id` in a row, like org: each press knows what the previous one left. */
+function tabs(root, id, count, fold = {}, last = null) {
+  const states = []
+  for (let i = 0; i < count; i += 1) {
+    const result = T.nextFold(root, fold, id, last)
+    states.push(result.state)
+    fold = result.fold
+    last = result.state
+  }
+  return { states, fold }
+}
+
+test('Tab in a row: folded → children → subtree → folded, skipping states that change nothing', () => {
+  const root = sample()
+  same(tabs(root, 'head', 2).states, ['open', 'folded'], 'all is the same as open for a leaf: skipped')
+  same(tabs(root, 'model', 3).states, ['open', 'folded', 'open'], 'model has no body and no grandchildren: open == all')
+  const deep = node('project', 'p', { id: 'p', children: [step('s', { id: 's', children: [step('t', { id: 't', body: 'x' })] })] })
+  same(tabs(deep, 's', 4).states, ['open', 'all', 'folded', 'open'])
+  assert.equal(T.nextFold(root, {}, 'lua', null).changed, false, 'no body, no line: Tab is a no-op')
+})
+
+test('a Tab after anything else folds an open node instead of going on to the subtree', () => {
+  const deep = node('project', 'p', { id: 'p', children: [step('s', { id: 's', children: [step('t', { id: 't', body: 'x' })] })] })
+  const opened = T.nextFold(deep, {}, 's', null)
+  assert.equal(opened.state, 'open')
+  assert.equal(T.nextFold(deep, opened.fold, 's', null).state, 'folded', 'the run was broken')
+  assert.equal(T.nextFold(deep, { s: 'all' }, 's', null).state, 'folded')
+  assert.equal(T.nextFold(deep, { s: 'children' }, 's', null).state, 'folded', 'contents, then Tab: folded')
+})
+
+test('opening shows one level: children folded, lanes folded to their labels, nothing below remembered', () => {
+  const deep = node('project', 'p', {
+    id: 'p',
+    children: [
+      step('s', {
+        id: 's',
+        children: [
+          step('t', { id: 't', body: 'x', children: [step('u', { id: 'u' })] }),
+          fork('', [lane('a', [step('a1', { id: 'a1' })], { id: 'la' }), lane('b', [step('b1', { id: 'b1' })], { id: 'lb' })], { id: 'fs' }),
+        ],
+      }),
+    ],
+  })
+  const { fold } = T.nextFold(deep, { s: 'folded', t: 'open', la: 'open' }, 's', null)
+  const folds = T.computeFolds(deep, fold)
+  assert.equal(folds.get('s').lineShown, true)
+  assert.equal(folds.get('t').lineShown, false, 't was open before; org forgets it')
+  assert.equal(folds.get('t').bodyShown, false)
+  for (const id of ['la', 'lb']) assert.equal(folds.get(id).lineShown, false, `${id} shows only its label`)
+  same(tabs(deep, 's', 1, fold, 'open').states, ['all'])
+  assert.equal(T.computeFolds(deep, tabs(deep, 's', 1, fold, 'open').fold).get('la').lineShown, true, 'the subtree shows every lane')
+})
+
+test('Tab under a "show all" folds just that node; the rest stays as it was', () => {
+  const root = sample()
+  const result = T.nextFold(root, { proj: 'all' }, 'model', null)
   assert.equal(result.state, 'folded')
-  assert.equal(result.fold.proj, 'open', 'the all above is made explicit')
-  assert.equal(T.computeFolds(root, result.fold).get('lq').lineShown, true, 'the rest stays open')
+  assert.equal(result.fold.proj, 'open', 'the all above is pushed down')
+  const folds = T.computeFolds(root, result.fold)
+  assert.equal(folds.get('model').lineShown, false)
+  assert.equal(folds.get('lq').lineShown, true, 'the rest stays open')
+  assert.equal(folds.get('head').bodyShown, true)
+  assert.equal(folds.get('proj').bodyShown, true)
 })
 
 test('Shift+Tab: overview → contents → show all → overview, skipping views that change nothing', () => {
@@ -455,6 +562,8 @@ test('Shift+Tab: overview → contents → show all → overview, skipping views
     mode = result.mode
   }
   same(modes, ['overview', 'contents', 'all', 'overview'])
+  const contentsView = T.globalFold(root, 'contents')
+  assert.equal(T.nextGlobalFold(root, contentsView, null).mode, 'overview', 'after anything else, Shift+Tab starts at the overview')
   const overview = T.computeFolds(root, T.globalFold(root, 'overview'))
   assert.equal(overview.get('lq').lineShown, false, 'overview folds lanes')
   assert.equal(overview.get('proj').lineShown, true, 'the main line stays visible')
@@ -489,9 +598,29 @@ test('a draft card is inserted where the new step will go', () => {
   assert.equal(after.children[1], root.children[1], 'untouched branches are shared')
 })
 
+test('the wheel zooms; Shift and a sideways wheel pan; a scrolling box keeps the wheel', () => {
+  const wheel = (extra) => ({ deltaX: 0, deltaY: 0, deltaMode: 0, shiftKey: false, ctrlKey: false, metaKey: false, ...extra })
+  const box = (extra) => ({ scrollTop: 0, scrollLeft: 0, scrollHeight: 100, scrollWidth: 100, clientHeight: 100, clientWidth: 100, ...extra })
+  same(T.wheelIntent(wheel({ deltaY: 100 }), [], 600), { kind: 'zoom', delta: 100 })
+  same(T.wheelIntent(wheel({ deltaY: 3, deltaMode: 1 }), [], 600), { kind: 'zoom', delta: 48 }, 'line mode is in pixels')
+  same(T.wheelIntent(wheel({ deltaY: -4, ctrlKey: true }), [], 600), { kind: 'zoom', delta: -4 }, 'a pinch zooms')
+  same(T.wheelIntent(wheel({ deltaY: 100, shiftKey: true }), [], 600), { kind: 'pan', dx: 100 })
+  same(T.wheelIntent(wheel({ deltaX: 100, shiftKey: true }), [], 600), { kind: 'pan', dx: 100 }, 'Shift already turned sideways')
+  same(T.wheelIntent(wheel({ deltaX: 40, deltaY: 2 }), [], 600), { kind: 'pan', dx: 40 }, 'a sideways wheel')
+
+  const tall = box({ scrollHeight: 400 })
+  same(T.wheelIntent(wheel({ deltaY: 100 }), [tall], 600), { kind: 'native' })
+  same(T.wheelIntent(wheel({ deltaY: -100 }), [tall], 600), { kind: 'hold' }, 'at its top it holds, never zooms')
+  same(T.wheelIntent(wheel({ deltaY: 100, ctrlKey: true }), [tall], 600), { kind: 'zoom', delta: 100 })
+  const wide = box({ scrollWidth: 400 })
+  same(T.wheelIntent(wheel({ deltaY: 100 }), [wide], 600), { kind: 'zoom', delta: 100 }, 'a wide code block does not take a vertical wheel')
+  same(T.wheelIntent(wheel({ deltaY: 100 }), [wide, tall], 600), { kind: 'native' }, 'the card body around it does')
+  same(T.wheelIntent(wheel({ deltaY: 100, shiftKey: true }), [wide], 600), { kind: 'native' })
+})
+
 test('a stored view is cleaned before use', () => {
   const view = T.normalizeView({ fold: { a: 'open', b: 'sideways' }, offsets: { a: { dx: 3, dy: 'x' }, z: { dx: 0, dy: 0 } }, camera: { x: 1, y: 2 }, cycle: 'all', selected: 7 })
-  same(view, { fold: { a: 'open' }, offsets: { a: { dx: 3, dy: 0 } }, camera: null, cycle: 'all', selected: null })
+  same(view, { fold: { a: 'open' }, offsets: { a: { dx: 3, dy: 0 } }, camera: null, selected: null }, 'a Shift+Tab run is not kept')
   assert.equal(T.shortTitle('(工单 1234) NAS 迁移到 ZFS【存储】旧盘换新盘'), 'NAS 迁移到 ZFS')
   assert.equal(T.shortTitle('BLOG'), 'BLOG')
 })
