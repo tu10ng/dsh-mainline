@@ -100,6 +100,8 @@ their contexts apart.
   (`lib/atomic.js`). Never write a project file any other way.
 - Hand edits are welcome: the watcher reports them as `tree/external` and commits them; it never
   writes back in response.
+- Claude Code edits the tree through the `skills/todo-mainline` skill (`~/.claude/skills/todo-mainline`
+  is a junction to it). It restates the format, markers and states: change it with `lib/format.js`.
 - `.mainline/` is local and ignored: lock, event log, session id, per-project view state.
 
 ## UI style (hard)
