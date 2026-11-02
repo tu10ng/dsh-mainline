@@ -33,17 +33,18 @@ function sample() {
 }
 
 test('KINDS and STATES are the contract lists', () => {
-  assert.deepEqual([...KINDS], ['project', 'step', 'fork', 'lane', 'ref'])
+  assert.deepEqual([...KINDS], ['project', 'step', 'fork', 'lane', 'ref', 'table'])
   assert.deepEqual([...STATES], ['', 'question', 'todo', 'halt', 'done'])
 })
 
 test('canContain follows the SPEC 1.2 table exactly', () => {
   const table = {
-    project: ['step', 'fork', 'ref'],
-    step: ['step', 'fork', 'ref'],
+    project: ['step', 'fork', 'ref', 'table'],
+    step: ['step', 'fork', 'ref', 'table'],
     fork: ['lane', 'ref'],
-    lane: ['step', 'fork', 'ref'],
+    lane: ['step', 'fork', 'ref', 'table'],
     ref: ['ref'],
+    table: ['ref'],
   }
   for (const parent of KINDS) {
     for (const child of KINDS) assert.equal(canContain(parent, child), table[parent].includes(child), `${parent} > ${child}`)

@@ -16,11 +16,12 @@ import { homedir } from 'node:os'
 
 const SHELL_LANGS = ['bash', 'sh', 'shell', 'zsh', 'console', 'pwsh', 'powershell', 'ps1', 'cmd', 'bat']
 const CAN_CONTAIN = {
-  project: ['step', 'fork', 'ref'],
-  step: ['step', 'fork', 'ref'],
+  project: ['step', 'fork', 'ref', 'table'],
+  step: ['step', 'fork', 'ref', 'table'],
   fork: ['lane', 'ref'],
-  lane: ['step', 'fork', 'ref'],
+  lane: ['step', 'fork', 'ref', 'table'],
   ref: ['ref'],
+  table: ['ref'],
 }
 const OP_KEYS = {
   create: ['project', 'parent', 'after', 'kind', 'title', 'state', 'body', 'attrs'],
