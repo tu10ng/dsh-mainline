@@ -22,8 +22,8 @@ unclear. So each project here is:
 - **reference** — commands, code locations, register values, links, design docs hung on a step.
   Looked up, not followed: **never drawn as part of the line**;
 - **chapter** — a step can carry its own sub-line;
-- **question** — a `?` step. While open it is a record (`todo` when it needs special
-  attention); the answer goes into its body and it becomes `halt`. Competing hypotheses become a fork.
+- **question** — a step in the `?` state. The answer goes into its body and it becomes `halt`.
+  Competing hypotheses become a fork.
 
 **One rule at every level, no limits, no patches.** The project's line, a chapter and a lane are
 the same thing and behave the same way; none is the only one. A project can hold several unrelated
@@ -32,7 +32,9 @@ thing next to a project's first step: "没说只能有一个主线啊" — then 
 the model cannot express something, generalize the rule; never add a flag or a concept that only
 works in one place.
 
-States are exactly four (the user's 2026-10-30 rule): record (`''`); `todo` — only what needs special
+States are exactly five, one per heading like an org keyword (the user's 2026-10-30 rule; `?` made a
+state, not a separate flag, on 2026-11-02): record (`''`); `question` (`?`) — an open doubt, drawn as
+a record (not live); `todo` — only what needs special
 attention (a follow-up task that does not is a record, not `todo`); `halt` —
 progress, "this step was walked" (done or stopped, deliberately not distinguished), so most recorded
 steps are `halt`; `done` — only in lists such as an SR list, "this item is met". Do not add

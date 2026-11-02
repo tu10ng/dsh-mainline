@@ -23,7 +23,7 @@ const CAN_CONTAIN = {
   ref: ['ref'],
 }
 const OP_KEYS = {
-  create: ['project', 'parent', 'after', 'kind', 'title', 'state', 'question', 'body', 'attrs'],
+  create: ['project', 'parent', 'after', 'kind', 'title', 'state', 'body', 'attrs'],
   update: ['project', 'id', 'patch'],
   move: ['project', 'id', 'parent', 'after'],
   remove: ['project', 'id'],
@@ -238,7 +238,7 @@ export function createMockApi(options) {
         const parent = find(project.root, op.parent)
         if (!parent) fail('not-found', `找不到 ${op.parent}`)
         if (!CAN_CONTAIN[parent.node.kind]?.includes(op.kind)) fail('invalid-kind', `${parent.node.kind} 下不能放 ${op.kind}`)
-        const node = { id: newId(used(project)), kind: op.kind, title: cleanTitle(op.title), state: op.state ?? '', question: op.question === true, body: op.body ?? '', attrs: op.attrs ?? {}, children: [] }
+        const node = { id: newId(used(project)), kind: op.kind, title: cleanTitle(op.title), state: op.state ?? '', body: op.body ?? '', attrs: op.attrs ?? {}, children: [] }
         insertAt(parent.node, op.after, node)
         nodeId = node.id
         emit({ type: 'node/created', project: project.id, node: node.id, summary: `新增「${where(project, node.id)}」`, data: { kind: node.kind, title: node.title, parent: op.parent, after: op.after ?? null } })
@@ -250,11 +250,11 @@ export function createMockApi(options) {
         if (!hit) fail('not-found', `找不到 ${op.id}`)
         const patch = op.patch ?? {}
         const fields = []
-        for (const key of ['title', 'state', 'question', 'body', 'attrs']) {
+        for (const key of ['title', 'state', 'body', 'attrs']) {
           if (!(key in patch)) continue
           let value = patch[key]
           if (key === 'title') value = cleanTitle(value)
-          if (key === 'state' && !['', 'todo', 'halt'].includes(value)) fail('invalid-state', `状态 ${value} 不合法`)
+          if (key === 'state' && !['', 'question', 'todo', 'halt', 'done'].includes(value)) fail('invalid-state', `状态 ${value} 不合法`)
           if (JSON.stringify(hit.node[key]) !== JSON.stringify(value)) {
             hit.node[key] = value
             fields.push(key)
@@ -311,8 +311,8 @@ export function createMockApi(options) {
         const names = (op.lanes ?? []).map((name) => cleanTitle(name))
         if (names.length < 2) fail('invalid-op', '至少两条支线')
         const taken = used(project)
-        const fork = { id: newId(taken), kind: 'fork', title: op.title ? cleanTitle(op.title) : '', state: '', question: false, body: '', attrs: {}, children: [] }
-        fork.children = names.map((title) => ({ id: newId(taken), kind: 'lane', title, state: '', question: false, body: '', attrs: {}, children: [] }))
+        const fork = { id: newId(taken), kind: 'fork', title: op.title ? cleanTitle(op.title) : '', state: '', body: '', attrs: {}, children: [] }
+        fork.children = names.map((title) => ({ id: newId(taken), kind: 'lane', title, state: '', body: '', attrs: {}, children: [] }))
         hit.parent.children.splice(hit.index + 1, 0, fork)
         nodeId = fork.id
         emit({ type: 'node/created', project: project.id, node: fork.id, summary: `在「${where(project, op.after)}」之后分成 ${names.join(' / ')}`, data: { kind: 'fork', title: fork.title, parent: hit.parent.id, after: op.after } })
@@ -321,7 +321,7 @@ export function createMockApi(options) {
       case 'createProject': {
         const title = cleanTitle(op.title)
         const taken = new Set(projects.keys())
-        const root = { id: newId(taken), kind: 'project', title, state: '', question: false, body: op.body ?? '', attrs: {}, children: [], preamble: '' }
+        const root = { id: newId(taken), kind: 'project', title, state: '', body: op.body ?? '', attrs: {}, children: [], preamble: '' }
         project = { id: root.id, file: `${title.replace(/[\\/:*?"<>|#{}\s]+/g, '-').slice(0, 60)}.md`, rev: '', root }
         projects.set(project.id, project)
         order.push(project.id)

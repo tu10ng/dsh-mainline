@@ -64,7 +64,6 @@ test('homelab keeps the prototype structure', () => {
   assert.deepEqual(fork.children.map((c) => `${c.kind}:${c.title}`), ['lane:nas-a', 'lane:nas-b'])
   assert.deepEqual(find(root, 'nas-b').children.map((c) => c.title), ['清点旧盘', '换盘', '内核日志', '验证'])
   const q = find(root, '确认 ashift 是否设为 12')
-  assert.equal(q.question, true)
   assert.equal(q.state, 'halt')
   assert.match(find(root, '内核日志').body, /```bash\ndmesg \| grep -i ata\n```/)
   const sig = findNode(root, find(root, '校验').id)
@@ -72,11 +71,10 @@ test('homelab keeps the prototype structure', () => {
   assert.equal(root.children.at(-1).title, '收尾')
 })
 
-test('backup: the doubt is a todo question followed by a fork of two hypotheses', () => {
+test('backup: the doubt is an open question followed by a fork of two hypotheses', () => {
   const root = parse(readFileSync(join(FIXTURES, 'backup.md'), 'utf8'), { file: 'backup.md' })
   const line = root.children.filter((c) => c.kind !== 'ref')
-  assert.equal(line[0].question, true)
-  assert.equal(line[0].state, 'todo')
+  assert.equal(line[0].state, 'question')
   assert.equal(line[1].kind, 'fork')
   assert.deepEqual(line[1].children.map((c) => c.kind), ['lane', 'lane'])
 })
@@ -157,6 +155,19 @@ test('parse -> serialize -> parse is a fixpoint for non-canonical input', () => 
     assert.deepEqual(twice, once, text)
     assert.equal(serialize(twice), out)
   }
+})
+
+test('the state is one keyword before the marker, `?` among them', () => {
+  const root = parse('# ? P {#proj}\n\n## ? q {#qqqq}\n\n## ? REF r {#rrrr}\n\n## ? FORK f {#ffff}\n\n### l {#llll}\n\n## TODO ? t {#tttt}\n', { file: 'p.md' })
+  assert.equal(root.state, 'question')
+  assert.deepEqual(root.children.map((c) => [c.kind, c.state, c.title]), [
+    ['step', 'question', 'q'],
+    ['ref', 'question', 'r'],
+    ['fork', 'question', 'f'],
+    // one keyword per heading, as in org-mode: a second one is title text
+    ['step', 'todo', '? t'],
+  ])
+  assert.match(serialize(root), /^## TODO \\\? t \{#tttt\}$/m)
 })
 
 // ───────────────────────── kind inference ─────────────────────────
@@ -256,10 +267,10 @@ test('duplicate ids: the later one is replaced deterministically', () => {
 // ───────────────────────── escapes ─────────────────────────
 
 const rootWith = (children) => ({
-  id: 'proj', kind: 'project', title: 'P', state: '', question: false, body: '', attrs: {}, preamble: '', children,
+  id: 'proj', kind: 'project', title: 'P', state: '', body: '', attrs: {}, preamble: '', children,
 })
 const stepOf = (id, title, body = '', extra = {}) => ({
-  id, kind: 'step', title, state: '', question: false, body, attrs: {}, children: [], ...extra,
+  id, kind: 'step', title, state: '', body, attrs: {}, children: [], ...extra,
 })
 
 test('titles that look like markers or attribute blocks survive', () => {
@@ -267,13 +278,11 @@ test('titles that look like markers or attribute blocks survive', () => {
     'TODO x', 'HALT x', 'DONE x', 'REF x', 'FORK x', '? x', '?', 'TODO', 'DONE', '\\TODO x', '\\', '\\\\x', 'x {a}', '{a}', 'x \\{a}', 'x {#id}',
     'x {a="b c"}', 'ends with \\', 'a } b', 'a { b', '# hash', '#', 'TODO ? REF x', '"quoted"', 'REF', 'FORK',
   ]
-  for (const state of ['', 'todo', 'halt', 'done']) {
-    for (const question of [false, true]) {
-      const kids = titles.map((t, i) => stepOf(`s${String(i).padStart(3, '0')}`, t, '', { state, question }))
-      const root = rootWith(kids)
-      const back = parse(serialize(root))
-      assert.deepEqual(back, root, `${state}/${question}`)
-    }
+  for (const state of ['', 'question', 'todo', 'halt', 'done']) {
+    const kids = titles.map((t, i) => stepOf(`s${String(i).padStart(3, '0')}`, t, '', { state }))
+    const root = rootWith(kids)
+    const back = parse(serialize(root))
+    assert.deepEqual(back, root, state)
   }
 })
 
@@ -398,8 +407,7 @@ function randomTree(seed) {
       id: `n${(counter += 1).toString(36).padStart(4, '0')}`,
       kind,
       title: randomTitle(r),
-      state: r() < 0.5 ? '' : ['todo', 'halt', 'done'][Math.floor(r() * 3)],
-      question: r() < 0.15,
+      state: r() < 0.5 ? '' : ['question', 'todo', 'halt', 'done'][Math.floor(r() * 4)],
       body: randomBody(r),
       attrs: {},
       children: [],

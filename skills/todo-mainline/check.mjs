@@ -18,7 +18,7 @@ const name = basename(file)
 function heads(text) {
   const out = new Map()
   const walk = (n, parent) => {
-    out.set(n.id, [parent, n.kind, n.state, n.question ? '?' : '', n.title].join('|'))
+    out.set(n.id, [parent, n.kind, n.state, n.title].join('|'))
     n.children.forEach(c => walk(c, n.id))
   }
   walk(parse(text, { file: name }), '')

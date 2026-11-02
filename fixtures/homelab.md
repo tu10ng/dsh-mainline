@@ -166,7 +166,7 @@ zpool status
 
 每一步的命令和输出都记到迁移日志里，方便事后复盘。
 
-## HALT ? 确认 ashift 是否设为 12 {#hl42}
+## HALT 确认 ashift 是否设为 12 {#hl42}
 
 确认过：两块新盘都是 4K 扇区，建池时显式指定 ashift=12，zpool get ashift tank 返回 12。
 

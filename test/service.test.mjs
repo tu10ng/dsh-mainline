@@ -60,11 +60,11 @@ test('create appends, inserts first, inserts after a sibling, and returns the ne
   const end = await apply(service, { type: 'create', project: 'proj', parent: 'proj', kind: 'step', title: '  末尾\n步  ' })
   assert.equal(service.locate('proj', end.nodeId).node.title, '末尾 步')
   const first = await apply(service, { type: 'create', project: 'proj', parent: 'proj', after: '', kind: 'step', title: '最前' })
-  const mid = await apply(service, { type: 'create', project: 'proj', parent: 'proj', after: 's1', kind: 'step', title: '中间', state: 'todo', question: true, body: '说明\r\n', attrs: { cwd: 'D:/x y' } })
+  const mid = await apply(service, { type: 'create', project: 'proj', parent: 'proj', after: 's1', kind: 'step', title: '中间', state: 'question', body: '说明\r\n', attrs: { cwd: 'D:/x y' } })
   const kids = service.getProject('proj').root.children.map((c) => c.id)
   assert.deepEqual([kids[0], kids[kids.indexOf('s1') + 1], kids.at(-1)], [first.nodeId, mid.nodeId, end.nodeId])
   const node = service.locate('proj', mid.nodeId).node
-  assert.deepEqual([node.state, node.question, node.body, node.attrs], ['todo', true, '说明', { cwd: 'D:/x y' }])
+  assert.deepEqual([node.state, node.body, node.attrs], ['question', '说明', { cwd: 'D:/x y' }])
   assert.match(end.events[0].summary, /^添加了步骤：Homelab › 末尾 步（第 \d+ 步）$/)
   assert.equal(end.events[0].type, 'node/created')
   assert.equal(end.project.root.id, 'proj')
@@ -99,7 +99,7 @@ test('validation uses the SPEC codes', async () => {
   await assert.rejects(() => create({ attrs: { a: 'x\ny' } }), { code: 'invalid-attrs' })
   await assert.rejects(() => create({ attrs: { 'bad key': 'x' } }), { code: 'invalid-attrs' })
   await assert.rejects(() => create({ attrs: { a: 1 } }), { code: 'invalid-attrs' })
-  await assert.rejects(() => create({ question: 'yes' }), { code: 'invalid-op' })
+  await assert.rejects(() => create({ question: true }), { code: 'invalid-op' })
   await create({ title: 'x'.repeat(300), body: 'x'.repeat(100_000) })
 })
 
@@ -123,12 +123,12 @@ test('unknown ops, unknown keys and missing fields are invalid-op', async () => 
 
 test('update changes fields, reports before/after, and a no-op makes no event and no commit', async () => {
   const { service, scheduled, published } = await rig()
-  const result = await apply(service, { type: 'update', project: 'proj', id: 's1', patch: { title: '开头改', state: 'halt', question: true, body: '一些正文', attrs: { cwd: '/w' } } })
+  const result = await apply(service, { type: 'update', project: 'proj', id: 's1', patch: { title: '开头改', state: 'halt', body: '一些正文', attrs: { cwd: '/w' } } })
   const node = service.locate('proj', 's1').node
-  assert.deepEqual([node.title, node.state, node.question, node.body, node.attrs], ['开头改', 'halt', true, '一些正文', { cwd: '/w' }])
+  assert.deepEqual([node.title, node.state, node.body, node.attrs], ['开头改', 'halt', '一些正文', { cwd: '/w' }])
   const [event] = result.events
   assert.equal(event.type, 'node/updated')
-  assert.deepEqual(event.data.fields, ['title', 'state', 'question', 'body', 'attrs'])
+  assert.deepEqual(event.data.fields, ['title', 'state', 'body', 'attrs'])
   assert.deepEqual(event.data.before.body, 0)
   assert.deepEqual(event.data.after.body, 4)
   assert.equal(event.data.before.title, '开头')

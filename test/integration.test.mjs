@@ -165,12 +165,12 @@ test('/op create, update, move, remove, insert and fork reach the file, the stre
   assert.match(readFileSync(path.join(root, 'homelab.md'), 'utf8'), new RegExp(`## TODO 面板加的步骤 \\{#${created.nodeId}\\}`))
 
   const second = await op({ type: 'create', project: 'hl01', parent: 'hl01', after: created.nodeId, kind: 'step', title: '第二步' })
-  await op({ type: 'update', project: 'hl01', id: second.nodeId, patch: { title: '第二步（改）', question: true } })
+  await op({ type: 'update', project: 'hl01', id: second.nodeId, patch: { title: '第二步（改）', state: 'question' } })
   await op({ type: 'move', project: 'hl01', id: second.nodeId, parent: 'hl01', after: '' })
   const { project } = await host.data('GET', '/project?id=hl01')
   assert.equal(project.root.children[0].id, second.nodeId)
   assert.equal(project.root.children[0].title, '第二步（改）')
-  assert.equal(project.root.children[0].question, true)
+  assert.equal(project.root.children[0].state, 'question')
 
   const forked = await op({ type: 'fork', project: 'hl01', after: created.nodeId, title: '两个环境', lanes: ['甲', '乙'] })
   const fork = forked.project.root.children.find((c) => c.id === forked.nodeId)

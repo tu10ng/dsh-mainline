@@ -7,7 +7,6 @@ export const node = (id, kind, title, extra = {}) => ({
   kind,
   title,
   state: '',
-  question: false,
   body: '',
   attrs: {},
   children: [],

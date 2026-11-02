@@ -32,7 +32,7 @@ async function watched(files = { 'a.md': A }) {
   return { root, store, watch, calls }
 }
 
-test('diffTrees reports added, removed and changed ids (title, state, question, body)', () => {
+test('diffTrees reports added, removed and changed ids (title, state, body)', () => {
   const before = parse('# P {#pppp}\n\n## 一 {#s1}\n\n## 二 {#s2}\n\n## 三 {#s3}\n\n## 四 {#s4}\n\n## 五 {#s5}\n', { file: 'p.md' })
   const after = parse('# P {#pppp}\n\n## 一改 {#s1}\n\n## TODO 二 {#s2}\n\n## ? 三 {#s3}\n\n正文\n\n## 四 {#s4}\n\n## 六 {#s6}\n', { file: 'p.md' })
   const diff = diffTrees(before, after)

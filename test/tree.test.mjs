@@ -11,7 +11,6 @@ const n = (kind, title, o = {}) => ({
   kind,
   title,
   state: o.state ?? '',
-  question: Boolean(o.question),
   body: o.body ?? '',
   attrs: {},
   children: o.children ?? [],
@@ -29,13 +28,13 @@ function sample() {
     n('ref', '设计文档', { id: 'ref1' }),
     n('step', '头文件', { id: 'step1', state: 'halt' }),
     fork,
-    n('step', '一个非常非常长的步骤标题用来测试裁剪行为', { id: 'long', question: true, state: 'todo' }),
+    n('step', '一个非常非常长的步骤标题用来测试裁剪行为', { id: 'long', state: 'todo' }),
   ] })
 }
 
 test('KINDS and STATES are the contract lists', () => {
   assert.deepEqual([...KINDS], ['project', 'step', 'fork', 'lane', 'ref'])
-  assert.deepEqual([...STATES], ['', 'todo', 'halt', 'done'])
+  assert.deepEqual([...STATES], ['', 'question', 'todo', 'halt', 'done'])
 })
 
 test('canContain follows the SPEC 1.2 table exactly', () => {
@@ -73,6 +72,9 @@ test('isLive: todo steps, containers of them, never through a halted step or a r
   assert.equal(isLive(halted), false)
   const done = n('step', 'd', { state: 'done', children: [n('step', 'inside', { state: 'todo' })] })
   assert.equal(isLive(done), false)
+  // an open question is a record: not live itself, and no wall in front of what it holds
+  assert.equal(isLive(n('step', 'q', { state: 'question' })), false)
+  assert.equal(isLive(n('step', 'q', { state: 'question', children: [n('step', 'inside', { state: 'todo' })] })), true)
   const holder = n('step', 'p', { children: [n('ref', 'r', { state: 'todo' })] })
   assert.equal(isLive(holder), false)
   const chapter = n('step', 'p', { children: [n('step', 'c', { children: [n('step', 'deep', { state: 'todo' })] })] })
@@ -127,12 +129,12 @@ test('newId: 4 chars [a-z0-9], registered, unique, grows on collisions', () => {
   assert.ok(Set.prototype.has.call(crowded, id))
 })
 
-test('counts: steps only for todo/halt/done/steps, questions over every node', () => {
+test('counts: steps only for todo/halt/done/steps, open questions over every node', () => {
   const root = sample()
-  assert.deepEqual(counts(root), { todo: 2, halt: 1, done: 0, steps: 6, questions: 1 })
+  assert.deepEqual(counts(root), { todo: 2, halt: 1, done: 0, steps: 6, questions: 0 })
   assert.deepEqual(counts(n('project', 'empty', { state: 'todo' })), { todo: 0, halt: 0, done: 0, steps: 0, questions: 0 })
   assert.equal(counts(n('project', 'P', { children: [n('step', 'sr', { state: 'done' })] })).done, 1)
-  const q = n('project', 'q', { children: [n('ref', 'r', { question: true }), n('step', 's', { question: true })] })
+  const q = n('project', 'q', { children: [n('ref', 'r', { state: 'question' }), n('step', 's', { state: 'question' }), n('step', 'answered', { state: 'halt' })] })
   assert.equal(counts(q).questions, 2)
 })
 
@@ -179,7 +181,7 @@ test('clone is a deep copy', () => {
 test('makeNode fills defaults, registers ids and validates', () => {
   const used = new Set(['keep'])
   const a = makeNode({ kind: 'step', title: '  one\nline  ' }, used)
-  assert.deepEqual({ ...a, id: undefined }, { id: undefined, kind: 'step', title: 'one line', state: '', question: false, body: '', attrs: {}, children: [] })
+  assert.deepEqual({ ...a, id: undefined }, { id: undefined, kind: 'step', title: 'one line', state: '', body: '', attrs: {}, children: [] })
   assert.ok(used.has(a.id))
   const kept = makeNode({ kind: 'ref', title: 'r', id: 'fixd' }, used)
   assert.equal(kept.id, 'fixd')
@@ -189,7 +191,7 @@ test('makeNode fills defaults, registers ids and validates', () => {
   assert.throws(() => makeNode({ kind: 'bogus', title: 'x' }), { code: 'invalid-kind' })
   assert.throws(() => makeNode({ kind: 'step', title: 'x', state: 'doing' }), { code: 'invalid-state' })
   assert.throws(() => makeNode(null), { code: 'invalid-op' })
-  const withAttrs = makeNode({ kind: 'project', title: 'P', attrs: { cwd: 'D:/x' }, state: 'todo', question: 1 })
+  const withAttrs = makeNode({ kind: 'project', title: 'P', attrs: { cwd: 'D:/x' }, state: 'question' })
   assert.deepEqual(withAttrs.attrs, { cwd: 'D:/x' })
-  assert.equal(withAttrs.question, true)
+  assert.equal(withAttrs.state, 'question')
 })

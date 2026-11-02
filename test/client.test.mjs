@@ -58,7 +58,6 @@ const node = (kind, title, extra = {}) => ({
   kind,
   title,
   state: extra.state ?? '',
-  question: extra.question ?? false,
   body: extra.body ?? '',
   attrs: {},
   children: extra.children ?? [],

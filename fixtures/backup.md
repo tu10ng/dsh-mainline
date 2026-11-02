@@ -14,7 +14,7 @@
 
 梳理调用链：backup.sh → run_rsync → verify_snapshot，以及退出码与锁文件的约定。
 
-## TODO ? 磁盘满时脚本是否静默退出 {#bk10}
+## ? 磁盘满时脚本是否静默退出 {#bk10}
 
 遗留疑问。
 
