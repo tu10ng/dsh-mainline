@@ -542,8 +542,9 @@ A card shows: question mark, title, and — when folded — a one-line peek of t
 with the reference count and the first two titles, and a `▸ N 步` chip for a chapter.
 Each node has a fold state in the view: `folded` | `open` | `all`.
 - `folded`: title + peek; its chapter/lane line is hidden.
-- `open`: the body rendered as Markdown **inside the card** (the card widens to 360 px), and its
-  line is shown (children themselves keep their own fold state).
+- `open`: the body rendered as Markdown **inside the card**, and its line is shown (children
+  themselves keep their own fold state). The card widens to 360 px, and further to fit its widest
+  table or code block (up to 1200 px, past which they scroll); prose wraps at that width.
 - `all`: the node and every descendant `open`.
 - **Tab** on the selected node cycles `folded → open → all → folded` (skipping states that change
   nothing). **Shift+Tab** cycles the whole project: overview (every node folded, the main line
