@@ -46,7 +46,8 @@ Rejected on purpose, with the reason the user gave:
 - per-project colours and badges ("not how people expect colours");
 - a "butler" persona — it is an ordinary DSH conversation;
 - letter shortcuts for structural actions (`Y` to fork, `Q` for a question) — those live in the
-  right-click menu. `Ctrl+Enter` (next step) and `Tab` (fold) stay.
+  right-click menu. `Ctrl+Enter` (next step), `Alt+Enter` (另起一条线: one more line under the card,
+  beside its others) and `Tab` (fold) stay.
 
 ## The event stream is the architecture (hard)
 
