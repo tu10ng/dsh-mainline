@@ -82,8 +82,11 @@ test('the kind table and the placement rules are enforced', async () => {
   await bad({ parent: 'proj', kind: 'bogus', title: 'x' }, 'invalid-kind')
   await bad({ parent: 'nope', kind: 'step', title: 'x' }, 'not-found')
   await bad({ parent: 'proj', after: 'c1', kind: 'step', title: 'x' }, 'invalid-op')
+  // A lane has no name: what is typed is its first step, and that step is what comes back.
   const ok = await apply(service, { type: 'create', project: 'proj', parent: 'f1', kind: 'lane', title: '第三条' })
-  assert.equal(service.locate('proj', ok.nodeId).node.kind, 'lane')
+  const first = service.locate('proj', ok.nodeId)
+  assert.deepEqual([first.node.kind, first.node.title, first.parent.kind, first.parent.title], ['step', '第三条', 'lane', ''])
+  assert.equal(ok.events[0].data.lane, first.parent.id)
   await apply(service, { type: 'create', project: 'proj', parent: 'd1', kind: 'ref', title: '嵌套参考' })
   await apply(service, { type: 'create', project: 'proj', parent: 'proj', kind: 'fork', title: '' })
 })
@@ -210,6 +213,28 @@ test('remove returns the subtree and insert puts it back, ids intact', async () 
   assert.equal(kids[kids.indexOf('s1') + 1], 'f1')
 })
 
+test('a lane is there for its items: the last one removed or moved out takes the lane along', async () => {
+  const { service } = await rig()
+  const gone = await apply(service, { type: 'remove', project: 'proj', id: 's2' })
+  assert.equal(gone.removed.id, 'l1', 'the lane goes, and comes back whole on undo')
+  assert.equal(gone.events[0].node, 'l1')
+  assert.equal(gone.events[0].data.requested, 's2')
+  assert.match(gone.events[0].summary, /所在的支线空了/)
+  assert.deepEqual(service.locate('proj', 'f1').node.children.map((c) => c.id), ['l2'])
+  await apply(service, { type: 'insert', project: 'proj', parent: 'f1', after: '', node: gone.removed })
+  assert.equal(service.locate('proj', 's2').parent.id, 'l1')
+  // Moved out: the emptied lane goes too.
+  const moved = await apply(service, { type: 'move', project: 'proj', id: 's2', parent: 'proj' })
+  assert.equal(moved.events[0].data.dropped, 'l1')
+  assert.equal(service.locate('proj', 'l1'), null)
+  // The last lane of a fork takes the fork with it.
+  const fork = await apply(service, { type: 'fork', project: 'proj', after: 's3', lanes: ['甲', '乙'] })
+  const [a, b] = service.locate('proj', fork.nodeId).node.children.map((lane) => lane.children[0].id)
+  await apply(service, { type: 'remove', project: 'proj', id: a })
+  const last = await apply(service, { type: 'remove', project: 'proj', id: b })
+  assert.equal(last.removed.id, fork.nodeId)
+})
+
 test('insert regenerates colliding ids, also inside the subtree, and validates kinds', async () => {
   const { service } = await rig()
   const subtree = { kind: 'step', id: 's1', title: '副本', children: [{ kind: 'step', id: 'c1', title: '子' }, { kind: 'step', id: 'c1', title: '同 id 的兄弟' }] }
@@ -226,12 +251,12 @@ test('insert regenerates colliding ids, also inside the subtree, and validates k
   await assert.rejects(() => apply(service, { type: 'insert', project: 'proj', parent: 'proj', node: 'x' }), { code: 'invalid-op' })
 })
 
-test('fork inserts a fork after a step with one empty lane per name', async () => {
+test('fork inserts a fork after a step, one unnamed lane per name, the name its first step', async () => {
   const { service } = await rig()
   const result = await apply(service, { type: 'fork', project: 'proj', after: 's1', title: '两个环境', lanes: ['甲', '乙', '丙'] })
   const fork = service.locate('proj', result.nodeId)
   assert.equal(fork.node.kind, 'fork')
-  assert.deepEqual(fork.node.children.map((l) => [l.kind, l.title, l.children.length]), [['lane', '甲', 0], ['lane', '乙', 0], ['lane', '丙', 0]])
+  assert.deepEqual(fork.node.children.map((l) => [l.kind, l.title, l.children.map((c) => `${c.kind}:${c.title}`).join()]), [['lane', '', 'step:甲'], ['lane', '', 'step:乙'], ['lane', '', 'step:丙']])
   assert.equal(fork.parent.children[fork.index - 1].id, 's1')
   assert.match(result.events[0].summary, /甲、乙、丙/)
   await apply(service, { type: 'fork', project: 'proj', after: 's2', lanes: ['a', 'b'] })

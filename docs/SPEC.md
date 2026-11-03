@@ -330,12 +330,12 @@ Ops (`op.type`), validated strictly (unknown keys → `invalid-op`):
 
 | type | fields | notes |
 |---|---|---|
-| `create` | `project, parent, after?, kind, title, state?, question?, body?, attrs?` | `after` omitted → append; `''` → first; else insert after that sibling. Kind must be allowed under parent (`invalid-kind`). Returns `nodeId`. |
+| `create` | `project, parent, after?, kind, title, state?, question?, body?, attrs?` | `after` omitted → append; `''` → first; else insert after that sibling. Kind must be allowed under parent (`invalid-kind`). Returns `nodeId`. A `lane` is created unnamed, `title` its first step, and `nodeId` is that step (the event's `data.lane` the lane). |
 | `update` | `project, id, patch: { title?, state?, question?, body?, append?, attrs?, setAttrs? }` | `attrs` replaces the whole map; `setAttrs` merges (`null` deletes a key); `append` adds a paragraph to the body under the lock. `body`+`append` or `attrs`+`setAttrs` together → `invalid-op`. No change → no event, no commit. |
-| `move` | `project, id, parent, after?` | within one project; refuses moving a node into itself/descendants, the project root, or a kind not allowed under the new parent (`invalid-move`) |
-| `remove` | `project, id` | returns the removed subtree in `removed` (for undo) |
+| `move` | `project, id, parent, after?` | within one project; refuses moving a node into itself/descendants, the project root, or a kind not allowed under the new parent (`invalid-move`). Moving a lane's last item out removes the emptied lane (`data.dropped`). |
+| `remove` | `project, id` | returns the removed subtree in `removed` (for undo). A lane is there for its items: removing its last one removes the lane, and a fork's last lane the fork; `removed` is then that lane or fork (`data.requested` the id asked for). |
 | `insert` | `project, parent, after?, node` | re-inserts a subtree (undo of remove); ids that now collide are regenerated |
-| `fork` | `project, after, title?, lanes: string[]` | inserts a fork right after step `after` in the same line, one empty lane per name (≥ 2 names) |
+| `fork` | `project, after, title?, lanes: string[]` | inserts a fork right after step `after` in the same line, one unnamed lane per name (≥ 2 names), the name its first step |
 | `branch` | `project, parent, title, state?, question?, body?` | a new step **beside** `parent`'s line rather than after it — the way to put another thing next to a line. A line that is nothing but one fork gets one more lane; any other line is split: its items, untouched (ids kept, two levels deeper), into an unnamed lane, the step into a second unnamed lane; into an empty line it is simply the first step. References stay with `parent`. Returns the step's id. |
 | `createProject` | `title, body?, markdown?` | `markdown` = a whole file to start from (import); returns the project id in `nodeId` |
 | `removeProject` | `project` | deletes the file (git keeps it) |
@@ -433,7 +433,7 @@ The actor is `{ kind: 'agent', session: exec?.agent?.id }`. States on the wire a
 | `mainline_update` | `project, id, title?, state?, question?, body?, append?, cwd?` | `{ ok, where }` — `append` adds a paragraph to the body |
 | `mainline_move` | `project, id, parent, after?` | `{ ok, where }` |
 | `mainline_remove` | `project, id` | `{ ok, removed: { title, count } }` |
-| `mainline_fork` | `project, after, lanes, title?` | `{ ok, id, lanes: [{ id, title }] }` |
+| `mainline_fork` | `project, after, lanes, title?` | `{ ok, id, steps: [{ id, title }] }` — each lane's first step |
 | `mainline_branch` | `project, parent?, title, state?, question?, body?` | `{ ok, id, where }` — the `branch` op; `parent` omitted = the project |
 | `mainline_write` | `project, node?, markdown` | `{ ok, rev }` — replace a subtree (or the whole project) with Markdown in the file format; ids present are kept |
 | `mainline_create_project` | `title, body?, markdown?` | `{ ok, id, file }` |
@@ -516,7 +516,10 @@ detail (top) and the conversation (bottom) by a second draggable splitter. The d
 conversation layout are approved by the user — keep them.
 
 Canvas layout: port the prototype's algorithm (`mLine`/`mStep`/`mFork` measure, `pLine`/`pStep`/
-`pFork` place, `elbow` edges, chapter frames). Lanes are **selectable and foldable** like cards.
+`pFork` place, `elbow` edges, chapter frames). **A lane is drawn as its first card**: lanes have
+no names, the split runs straight into each lane's first card, and that card stands for the lane
+(dragged, cut, folded, deleted as it). A lane that does not start with a card (empty, or a split
+written by hand) or has a hand-written title still draws a pill.
 A fork with nothing following it (1.2) draws no merge: each lane ends at its last item and the
 block is as tall as its tallest lane.
 
@@ -549,7 +552,7 @@ Defaults: steps with a chapter `folded`, lanes `open`, everything else `folded`.
 
 ### 5.4 Interaction
 
-- Click a card or a lane pill → select (and `POST focus`, debounced 300 ms). Click empty canvas →
+- Click a card → select (and `POST focus`, debounced 300 ms). Click empty canvas →
   deselect.
 - Double-click a title → rename inline (Enter saves, Esc cancels). Double-click the body of an
   `open` card (not a link, button, checkbox or code) → edit it in place with the same raw-Markdown
@@ -567,25 +570,26 @@ Defaults: steps with a chapter `folded`, lanes `open`, everything else `folded`.
   claimed on the canvas: it is also the browser's Back.
 - Ctrl+X → cut the selection (mark it); Ctrl+V on a target → move it after the target;
   Ctrl+Shift+V → move it into the target as the last child.
-- **Free dragging**: drag a card (or lane pill) anywhere; it and everything drawn beneath it
-  (its chapter / lane line) move together. Stored as a view offset `{ dx, dy }` per node, applied
+- **Free dragging**: drag a card anywhere; it and everything drawn beneath it (its chapter) move
+  together; a lane's first card drags the whole lane. Stored as a view offset `{ dx, dy }` per node, applied
   on top of the automatic layout and inherited by descendants; edges follow. **R** resets the
   selected node's offset (back to its place relative to the previous element); Shift+R resets every
   offset in the project. Dragging is never a structural move.
 - **Right-click context menu** (custom, at the pointer) instead of letter shortcuts:
   on a card — 加下一步 (Ctrl+Enter) · 加子步骤 · 从这里分叉… · 加参考 · 要做 / 不用做 / 记录 ·
   标为疑问 / 取消疑问 · 交给 AI 继续 · 剪切 (Ctrl+X) / 粘贴为下一步 (Ctrl+V) / 粘贴为子步骤 ·
-  恢复位置 (R) · 删除 (Del); on a lane — 改名 · 加一条支线 · 删除这条支线 · 恢复位置;
+  恢复位置 (R) · 删除 (Del); on a lane's first card also — 加一条支线 · 收起 / 展开这条支线
+  (folded, the card shows 「后面 N 步」) · 剪切这条支线 · 删除这条支线;
   on empty canvas — 另起一条线 · 在项目末尾加一步 · 全部折叠 / 全部展开 · 适应窗口.
-  **另起一条线** (on a card, the project card included, and on a lane as 在这条支线里再分) puts a
+  **另起一条线** (on a card, the project card included; **Alt+Enter**) puts a
   draft card right away **beside** that card's line — no form, nothing to name — and its title
   makes a `branch` op. On the project card it is the first item and **Ctrl+Enter**: a new thing
   in a project stands beside what is there; 在项目末尾加一步 is the other way to grow it. Otherwise
   the project card has the step card's items, minus those that need a line around it (加下一步,
   从这里分叉, cut, 恢复位置, 删除).
-  An unnamed lane draws as a small dot where the line splits (double-click to name it); unnamed
-  forks and lanes add nothing to the detail crumbs or to `where`.
-  "从这里分叉…" opens a small inline form (lane names, comma separated), never `window.prompt`.
+  Unnamed forks and lanes add nothing to the detail crumbs or to `where`.
+  "从这里分叉…" opens a small inline form (the first step of each lane, comma separated), never
+  `window.prompt`.
 - Canvas: drag empty space to pan; the wheel zooms (0.3–1.6) around the pointer, and so do
   Ctrl+wheel and a trackpad pinch; Shift+wheel or a sideways wheel pans sideways. A box in a card
   that scrolls along the wheel (body, code, table, run output) keeps the wheel, even at its end.

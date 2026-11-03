@@ -66,7 +66,9 @@ rsync -aHv --dry-run /mnt/old/ /tank/data/
 
 ## FORK 两台机器 {#hl20}
 
-### nas-a {#hl21}
+### {#hl21}
+
+#### nas-a {#hl21n}
 
 主力机，装两块新盘，建 raidz1 池并承载全部数据。
 
@@ -115,7 +117,9 @@ zfs list -o name,used,avail
 df -h
 ```
 
-### nas-b {#hl31}
+### {#hl31}
+
+#### nas-b {#hl31n}
 
 备份机，沿用旧盘，只做 send/recv 的目标。
 

@@ -174,7 +174,7 @@ test('/op create, update, move, remove, insert and fork reach the file, the stre
 
   const forked = await op({ type: 'fork', project: 'hl01', after: created.nodeId, title: '两个环境', lanes: ['甲', '乙'] })
   const fork = forked.project.root.children.find((c) => c.id === forked.nodeId)
-  assert.deepEqual(fork.children.map((l) => l.title), ['甲', '乙'])
+  assert.deepEqual(fork.children.map((l) => [l.title, l.children[0].title]), [['', '甲'], ['', '乙']])
 
   const removed = await op({ type: 'remove', project: 'hl01', id: forked.nodeId })
   assert.equal(removed.removed.id, forked.nodeId)

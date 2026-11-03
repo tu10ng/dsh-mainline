@@ -61,8 +61,9 @@ test('homelab keeps the prototype structure', () => {
   assert.deepEqual(find(root, '磁盘清单').children.map((c) => `${c.kind}:${c.title}`), ['ref:旧阵列', 'ref:新盘', 'ref:zpool 布局'])
   const fork = find(root, '两台机器')
   assert.equal(fork.kind, 'fork')
-  assert.deepEqual(fork.children.map((c) => `${c.kind}:${c.title}`), ['lane:nas-a', 'lane:nas-b'])
-  assert.deepEqual(find(root, 'nas-b').children.map((c) => c.title), ['清点旧盘', '换盘', '内核日志', '验证'])
+  // Lanes are unnamed: each one's first card is what it is called.
+  assert.deepEqual(fork.children.map((c) => `${c.kind}:${c.title}:${c.children[0].title}`), ['lane::nas-a', 'lane::nas-b'])
+  assert.deepEqual(fork.children[1].children.map((c) => c.title), ['nas-b', '清点旧盘', '换盘', '内核日志', '验证'])
   const q = find(root, '确认 ashift 是否设为 12')
   assert.equal(q.state, 'halt')
   assert.match(find(root, '内核日志').body, /```bash\ndmesg \| grep -i ata\n```/)

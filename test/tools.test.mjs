@@ -73,11 +73,11 @@ test('an invalid state is a typed failure, not a throw', async () => {
   assert.equal(result.reason, 'invalid-state')
 })
 
-test('remove reports the subtree size; fork lists lanes', async () => {
+test('remove reports the subtree size; fork lists the first step of each lane', async () => {
   const { run } = setup()
   assert.deepEqual((await run('mainline_remove', { project: 'p1', id: 'x' })).removed, { title: '被删', count: 2 })
   const fork = await run('mainline_fork', { project: 'p1', after: 's1', lanes: ['a', 'b'] })
-  assert.deepEqual(fork.lanes, [{ id: 'l1', title: 'nas-b' }])
+  assert.deepEqual(fork.steps, [{ id: 's3', title: '深层' }])
 })
 
 test('mainline_branch starts a line beside the project’s by default', async () => {

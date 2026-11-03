@@ -239,9 +239,12 @@ export function createMockApi(options) {
         const parent = find(project.root, op.parent)
         if (!parent) fail('not-found', `找不到 ${op.parent}`)
         if (!CAN_CONTAIN[parent.node.kind]?.includes(op.kind)) fail('invalid-kind', `${parent.node.kind} 下不能放 ${op.kind}`)
-        const node = { id: newId(used(project)), kind: op.kind, title: cleanTitle(op.title), state: op.state ?? '', body: op.body ?? '', attrs: op.attrs ?? {}, children: [] }
+        const taken = used(project)
+        const card = { id: newId(taken), kind: op.kind === 'lane' ? 'step' : op.kind, title: cleanTitle(op.title), state: op.state ?? '', body: op.body ?? '', attrs: op.attrs ?? {}, children: [] }
+        // A lane is unnamed: what was typed is its first step.
+        const node = op.kind === 'lane' ? { id: newId(taken), kind: 'lane', title: '', state: '', body: '', attrs: {}, children: [card] } : card
         insertAt(parent.node, op.after, node)
-        nodeId = node.id
+        nodeId = card.id
         emit({ type: 'node/created', project: project.id, node: node.id, summary: `新增「${where(project, node.id)}」`, data: { kind: node.kind, title: node.title, parent: op.parent, after: op.after ?? null } })
         break
       }
@@ -313,7 +316,7 @@ export function createMockApi(options) {
         if (names.length < 2) fail('invalid-op', '至少两条支线')
         const taken = used(project)
         const fork = { id: newId(taken), kind: 'fork', title: op.title ? cleanTitle(op.title) : '', state: '', body: '', attrs: {}, children: [] }
-        fork.children = names.map((title) => ({ id: newId(taken), kind: 'lane', title, state: '', body: '', attrs: {}, children: [] }))
+        fork.children = names.map((title) => ({ id: newId(taken), kind: 'lane', title: '', state: '', body: '', attrs: {}, children: [{ id: newId(taken), kind: 'step', title, state: '', body: '', attrs: {}, children: [] }] }))
         hit.parent.children.splice(hit.index + 1, 0, fork)
         nodeId = fork.id
         emit({ type: 'node/created', project: project.id, node: fork.id, summary: `在「${where(project, op.after)}」之后分成 ${names.join(' / ')}`, data: { kind: 'fork', title: fork.title, parent: hit.parent.id, after: op.after } })
