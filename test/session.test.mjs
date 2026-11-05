@@ -4,9 +4,9 @@ import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { GUIDANCE_FULL, GUIDANCE_SHORT } from '../lib/prompt.js'
+import { GUIDANCE_FULL, GUIDANCE_SHORT, renderConventions } from '../lib/prompt.js'
 import { createSession } from '../lib/session.js'
-import { makeAgent, makeCtx, makeEvents, makeService, text } from './helpers/host-fakes.mjs'
+import { makeAgent, makeCtx, makeEvents, makeService, node, text } from './helpers/host-fakes.mjs'
 
 async function setup(options = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'ml-session-'))
@@ -238,8 +238,11 @@ test('prompt section and context answer only for this session', async () => {
       context: (def) => (registered.push(def), () => {}),
     }
     env.session.registerPrompt(systemPrompt)
-    const [guidance, focus] = registered
+    const [guidance, conventions, focus] = registered
     assert.deepEqual([guidance.name, guidance.order, guidance.interpolate], ['dsh-mainline:guidance', 3050, false])
+    assert.deepEqual([conventions.name, conventions.order, conventions.interpolate], ['dsh-mainline:conventions', 3051, false])
+    assert.equal(conventions.text({ agent: { id: 'other' } }), '')
+    assert.match(conventions.text({ agent: { id: 'session-1' } }), /还没有约定项目/)
     assert.deepEqual([focus.name, focus.order, focus.interpolate], ['dsh-mainline:focus', 140, false])
     assert.equal(guidance.text({ agent: { id: 'session-1' } }), GUIDANCE_FULL)
     assert.equal(guidance.text({ agent: { id: 'other' } }), GUIDANCE_SHORT)
@@ -262,4 +265,14 @@ test('prompt section and context answer only for this session', async () => {
   } finally {
     await env.cleanup()
   }
+})
+
+test('conventions: every project marked role=conventions reaches the prompt, whole', () => {
+  const service = makeService(node('p1', 'project', '给 AI 的约定', { attrs: { role: 'conventions' }, children: [node('c1', 'step', '正文只写标题没说的')] }))
+  const rendered = renderConventions(service)
+  assert.match(rendered, /^【工作树·用户的约定】/)
+  assert.match(rendered, /「给 AI 的约定」（文件 homelab\.md，id p1）/)
+  assert.match(rendered, /## a/, 'the project as its Markdown reads')
+  assert.match(renderConventions(makeService()), /还没有约定项目/, 'an ordinary project is not a convention')
+  assert.equal(renderConventions({ listProjects: () => { throw new Error('half loaded') } }), '')
 })

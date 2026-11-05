@@ -391,6 +391,13 @@ conversation" creates one, so every plugin, tool, approval and model picker work
   ref; a new doubt → a `?` step; competing hypotheses → a fork); `halt` means "no longer to do"
   (done or paused, deliberately not distinguished); use `mainline_*` tools, never edit the
   Markdown files with file tools; history is git (`mainline_history` / `mainline_restore`).
+- Conventions: a project whose root carries `role=conventions` (「给 AI 的约定」) holds the user's
+  standing instructions, one card per habit (title the rule, body the reason). It is an ordinary
+  project — the panel shows it, the tools write it, git keeps it. `systemPrompt.section({ name:
+  'dsh-mainline:conventions', order: 3051, interpolate: false })` gives this session every such
+  project's Markdown (clipped at 12 000 chars); a section, not a context, since it rarely changes.
+  The guidance tells the model to record a correction or a "以后都…" there, editing a card rather
+  than stacking a contradicting one. Other sessions' short guidance tells them to read it.
 - The session must keep working after a plugin reload (it is owned by the Host, not this plugin).
 
 ### 4.2 Running a command from a card (`lib/runner.js`)
